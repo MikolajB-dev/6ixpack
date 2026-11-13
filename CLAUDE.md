@@ -27,7 +27,7 @@ Project idea
 
 TBD. Team to fill in. Claude: do not invent or change the concept. Build only what the user asks for inside their sector.
 
-Working notes from earlier chat (one proposed direction, not decided): rune-shaped physical blocks that visitors move, each with an nRF54L15 and LED feedback, passing a message block to block over Bluetooth, with a laptop screen as explainer. Multi-hop relay is a stretch goal.
+Working notes from earlier chat (one proposed direction, not decided): rune-shaped physical blocks that visitors move
 
 Event facts
 Techathon, 13-15 Nov 2026 (Fri to Sun), Kongernes Jelling (UNESCO site). Work area is "The Bank". Teams stay at Vejle Danhostel.
