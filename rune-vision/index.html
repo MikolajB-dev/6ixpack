@@ -180,6 +180,8 @@ function snapshot(){
     rune: state.committed[i] < 0 ? null : cfg.runes[state.committed[i]].name,
     runeIndex: state.committed[i],
     correct: state.committed[i] === cfg.answer[i],
+    wants: cfg.runes[cfg.answer[i]].name,                       // the rune that belongs on this place
+    wantsColor: runeCss(cfg.runes[cfg.answer[i]]),              // its colour, so the globe can show it
     coverage: Math.round(state.fill[i]),
     angle: state.rot[i] ? Math.round(state.rot[i].deg) : null,   // knob angle, 0-359, clockwise
     step: state.rot[i] ? state.rot[i].step : null,               // knob position 0..rotSteps-1
