@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rune Vision</title>
+<style>
+  :root{
+    --bg:#1e140c; --panel:#2b1d12; --edge:#5a3d22; --text:#f1e3c8; --muted:#b89b74;
+    --gold:#d9a441; --ok:#4fbf6a; --bad:#e2683c; --empty:#8a7a66; --beam:#59b7ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 Georgia,"Times New Roman",serif}
+  header{padding:12px 16px;border-bottom:2px solid var(--edge);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  header h1{margin:0;font-size:22px;letter-spacing:2px;color:var(--gold)}
+  #mode{padding:3px 10px;border:1px solid var(--edge);border-radius:12px;font-size:13px;color:var(--muted)}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px}
+  @media (max-width:900px){main{grid-template-columns:1fr}}
+  .stage{position:relative;background:#000;border:2px solid var(--edge);border-radius:8px;overflow:hidden}
+  #view{display:block;width:100%;height:auto;cursor:crosshair}
+  #hint{position:absolute;left:0;right:0;bottom:0;padding:8px 12px;background:rgba(30,20,12,.85);color:var(--gold);font-size:15px}
+  #hint:empty{display:none}
+  .panel{background:var(--panel);border:1px solid var(--edge);border-radius:8px;padding:12px;margin-bottom:12px}
+  .panel h2{margin:0 0 8px;font-size:15px;color:var(--gold);letter-spacing:1px;text-transform:uppercase}
+  button,select,input[type=text]{font:inherit;color:var(--text);background:#3a2817;border:1px solid var(--edge);border-radius:6px;padding:6px 10px}
+  button{cursor:pointer} button:hover{background:#4a331d}
+  button.primary{background:#7a4f20;border-color:var(--gold)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+  .slot{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;margin:6px 0;background:#3a2817;border-left:6px solid var(--empty)}
+  .slot.ok{border-color:var(--ok)} .slot.bad{border-color:var(--bad)}
+  .slot small{color:var(--muted)}
+  .sw{display:inline-block;width:16px;height:16px;border-radius:50%;border:1px solid #000;vertical-align:middle}
+  label{font-size:13px;color:var(--muted)}
+  input[type=range]{width:140px}
+  .keys{font-size:13px;color:var(--muted)} kbd{background:#3a2817;border:1px solid var(--edge);border-radius:4px;padding:0 5px;color:var(--text)}
+  #quest{position:fixed;inset:0;display:none;z-index:10;background:#140d07}
+  /* Globe view: the globe page shown full screen on top of this page (press G). The camera keeps running underneath. */
+  #globeView{position:fixed;inset:0;width:100%;height:100%;border:0;display:none;z-index:9;pointer-events:none}
+  #globeView.show{display:block}
+  #quest.show{display:block;animation:fade .8s}
+  #questCv{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+  #questTop{position:absolute;top:16px;left:0;right:0;text-align:center;pointer-events:none;padding:0 16px}
+  #questTop h2{margin:0;font-size:clamp(24px,4vw,46px);letter-spacing:4px;color:var(--gold);text-shadow:0 0 18px rgba(217,164,65,.5)}
+  #questTop p{margin:6px 0 0;font-size:clamp(15px,1.8vw,22px);color:var(--text)}
+  #questBot{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+<header>
+  <h1>ᚱᚢᚾᛖ VISION</h1>
+  <span id="mode">starting…</span>
+  <select id="camSel" title="Camera"></select>
+  <button id="startBtn" class="primary">Start camera</button>
+  <button id="globeBtn" title="Show the globe (G). Press G again to come back.">Globe (G)</button>
+</header>
+
+<main>
+  <div>
+    <div class="stage">
+      <canvas id="view" width="960" height="540"></canvas>
+      <div id="hint"></div>
+    </div>
+    <p class="keys">
+      Backup keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> cycle the rune in Jelling / Yorba Linda / Tokyo (simulation),
+      <kbd>A</kbd> all correct, <kbd>0</kbd> clear all, <kbd>K</kbd> back to camera, <kbd>D</kbd> debug mask, <kbd>Esc</kbd> close the channel screen, <kbd>C</kbd> reopen it.
+    </p>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h2>Slots</h2>
+      <div id="slots"></div>
+    </div>
+
+    <div class="panel">
+      <h2>1 · Find the green zones</h2>
+      <div class="row">
+        <button id="autoBtn">Auto-detect</button>
+        <button id="manualBtn">Click them myself</button>
+        <button id="zoneTeachBtn">Teach zone colour</button>
+      </div>
+      <label>Left → right on the map: Yorba Linda, Jelling, Tokyo. If the green isn't found, press "Teach zone colour" and click on a green line.</label>
+    </div>
+
+    <div class="panel">
+      <h2>2 · Teach rune colours</h2>
+      <div id="runes"></div>
+      <label>Press "Teach", then click on that rune in the camera picture.</label>
+    </div>
+
+    <div class="panel">
+      <h2>3 · Which rune goes where</h2>
+      <div id="answers"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Tuning</h2>
+      <div class="row"><label style="width:110px">Colour tolerance</label><input type="range" id="hueTol" min="5" max="45"><span id="hueTolV"></span></div>
+      <div class="row"><label style="width:110px">Min. coverage</label><input type="range" id="minFill" min="1" max="40"><span id="minFillV"></span></div>
+      <div class="row"><label style="width:110px">Hold time</label><input type="range" id="debounce" min="0" max="3000" step="100"><span id="debounceV"></span></div>
+      <div class="row"><button id="debugBtn">Debug mask</button><button id="resetBtn">Reset everything</button></div>
+      <div class="row"><button id="zeroBtn">Zero knobs</button><button id="saveFileBtn">Save settings to file</button><button id="loadFileBtn">Load from file</button>
+        <input type="file" id="loadFileIn" accept=".json,application/json" style="display:none"></div>
+      <label>Put the saved <b>rune-settings.json</b> in the rune-vision folder: the page loads it automatically when the browser has nothing saved.</label>
+    </div>
+  </aside>
+</main>
+
+<iframe id="globeView" title="Rune Globe"></iframe>
+
+<div id="quest">
+  <canvas id="questCv"></canvas>
+  <div id="questTop"><h2 id="questTitle"></h2><p id="questMsg"></p></div>
+  <div id="questBot">Click a pathway or press 1 – 9, 0 = 10 · Esc closes · remove a stone to start over</div>
+</div>
+
+<script>
+/* ===================== config & state ===================== */
+const SLOTS = [
+  { id:'jelling', name:'Jelling',     place:'Denmark' },
+  { id:'yorba',   name:'Yorba Linda', place:'California' },
+  { id:'tokyo',   name:'Tokyo',       place:'Japan' },
+];
+const DEFAULTS = {
+  circles: [ {x:.25,y:.5,r:.1}, {x:.5,y:.5,r:.1}, {x:.75,y:.5,r:.1} ], // x,r as fraction of width, y of height
+  runes: [
+    { name:'Red rune',    h:357, s:.7, v:.6,  taught:false },
+    { name:'Blue rune',   h:215, s:.6, v:.55, taught:false },
+    { name:'Yellow rune', h:52,  s:.6, v:.7,  taught:false },
+  ],
+  zone: { h:100, s:.6, v:.6, taught:false }, // colour of the zone outlines (green squares on the map)
+  zoneOrder: [1,0,2], // left-to-right on the board: Yorba Linda, Jelling, Tokyo (slot indexes)
+  answer: [0,1,2],   // answer[slot] = index of the rune that belongs there
+  hueTol: 18,        // degrees
+  minFill: 8,        // % of the circle's inside that must be the rune colour
+  debounceMs: 800,   // a change must hold this long before it counts (stops hands triggering things)
+  required: [true,false,true], // which slots must be right to open the channel screen (Jelling + Tokyo)
+  channel: 6,        // the correct Bluetooth channel (1-10)
+  questOn: true,     // open the demo channel/snake screen when the needed stones are placed
+  rotSteps: 10,      // knob positions per full turn (10 pathways = 36° each)
+  rotZero: [0,0,0],  // angle that counts as "0" for the knob in each slot (set with "Zero knobs")
+};
+const STORE_KEY = 'runeVision.v2'; // v2: green zones on the map, red/blue/yellow runes
+let cfg = load();
+
+const state = {
+  committed: [-1,-1,-1],              // rune index per slot after debounce (-1 empty)
+  pending:   [{v:-1,t:0},{v:-1,t:0},{v:-1,t:0}],
+  fill:      [0,0,0],
+  sim: false, simSlots: [-1,-1,-1],
+  complete: false,                    // = required stones placed correctly
+  click: null,                        // {kind:'teach',rune} | {kind:'manual',step,pts}
+  debug: false,
+  rot: [null,null,null],              // {deg, raw, step, x, y} per slot when a marker is visible
+  lastSeen: {},                       // rune index -> {slot, t} when it was last removed (for "moved")
+};
+
+function load(){
+  try{ const s = JSON.parse(localStorage.getItem(STORE_KEY)); if(s) return Object.assign(structuredClone(DEFAULTS), s); }catch(e){}
+  return structuredClone(DEFAULTS);
+}
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); }catch(e){} }
+
+/* ===================== events (for the world map / BLE later) ===================== */
+// Other pages can listen with:  new BroadcastChannel('rune-board').onmessage = e => console.log(e.data)
+// Same page:  window.addEventListener('rune:state', e => ...)
+let bc = null; try{ bc = new BroadcastChannel('rune-board'); }catch(e){}
+function emit(type, detail){
+  const msg = { type, ...detail, time: Date.now() };
+  window.dispatchEvent(new CustomEvent('rune:'+type, { detail: msg }));
+  try{ bc && bc.postMessage(msg); }catch(e){}
+  if(window.parent !== window) window.parent.postMessage({ source:'rune-vision', ...msg }, '*');
+  console.log('[rune]', msg);
+}
+// [rune-globe] When globe.html opens it asks for the current board, so it is right even if no stone moves.
+if(bc) bc.addEventListener('message', e => {
+  if(e.data && e.data.type==='globe-hello') emit('state', snapshot());
+});
+function snapshot(){
+  return { slots: SLOTS.map((s,i)=>({
+    slot:s.id, name:s.name, place:s.place,
+    rune: state.committed[i] < 0 ? null : cfg.runes[state.committed[i]].name,
+    runeIndex: state.committed[i],
+    correct: state.committed[i] === cfg.answer[i],
+    coverage: Math.round(state.fill[i]),
+    angle: state.rot[i] ? Math.round(state.rot[i].deg) : null,   // knob angle, 0-359, clockwise
+    step: state.rot[i] ? state.rot[i].step : null,               // knob position 0..rotSteps-1
+  })), stonesReady: state.complete, stage: Q.stage, complete: Q.stage==='done' };
+}
+
+/* ===================== colour helpers ===================== */
+function rgb2hsv(r,g,b){
+  r/=255; g/=255; b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0;
+  if(d){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0) h+=360; }
+  return [h, mx?d/mx:0, mx];
+}
+const hueDist = (a,b) => { const d=Math.abs(a-b)%360; return d>180?360-d:d; };
+// zone outline colour (green by default; teach it with "Teach zone colour")
+function isZone(h,s,v){ const z=cfg.zone; return hueDist(h,z.h)<=25 && s>=Math.max(0.3,z.s*0.5) && v>=Math.max(0.2,z.v*0.4); }
+function matchesRune(h,s,v,r){
+  if(s < Math.max(0.3, r.s*0.6)) return false;   // stricter: the brown/beige map is close to red and yellow
+  if(v < Math.max(0.15, r.v*0.45)) return false;
+  return hueDist(h, r.h) <= cfg.hueTol;
+}
+function runeCss(r){ return `hsl(${r.h|0} ${Math.round(Math.min(1,r.s)*100)}% ${Math.round(Math.max(.25,Math.min(.6,r.v*.6))*100)}%)`; }
+
+/* ===================== camera / source ===================== */
+const view = document.getElementById('view'), vctx = view.getContext('2d');
+const proc = document.createElement('canvas'), pctx = proc.getContext('2d', { willReadFrequently:true });
+const PW = 320;                      // processing width (small = fast)
+const video = document.createElement('video'); video.playsInline = true; video.muted = true;
+let source = null;                   // video or image
+let stream = null;
+
+async function listCams(){
+  const sel = document.getElementById('camSel');
+  try{
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+    const cur = sel.value;
+    sel.innerHTML = devs.map((d,i)=>`<option value="${d.deviceId}">${d.label || 'Camera '+(i+1)}</option>`).join('');
+    if(cur) sel.value = cur;
+  }catch(e){}
+}
+async function startCamera(){
+  try{
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    const id = document.getElementById('camSel').value;
+    stream = await navigator.mediaDevices.getUserMedia({ video: {
+      deviceId: id ? { exact:id } : undefined, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+    video.srcObject = stream; await video.play();
+    source = video; await listCams();
+    hint(cfg.runes.some(r=>!r.taught) ? 'Camera on. Now find the circles (step 1) and teach the rune colours (step 2).' : '');
+  }catch(e){
+    hint('Could not open the camera: ' + e.message + '. Allow camera access in the browser, or use keys 1/2/3 to simulate.');
+  }
+  setMode();
+}
+function useImage(url){
+  const img = new Image(); img.onload = () => { source = img; setMode(); }; img.src = url;
+}
+navigator.mediaDevices?.addEventListener?.('devicechange', listCams);
+
+/* ===================== detection ===================== */
+let lastProc = 0, frame = null;  // frame = {w,h,data}
+function grabFrame(){
+  const sw = source.videoWidth || source.naturalWidth, sh = source.videoHeight || source.naturalHeight;
+  if(!sw || !sh) return null;
+  const ph = Math.round(PW*sh/sw);
+  if(proc.width!==PW || proc.height!==ph){ proc.width=PW; proc.height=ph; }
+  pctx.drawImage(source,0,0,PW,ph);
+  return { w:PW, h:ph, data: whiteBalance(pctx.getImageData(0,0,PW,ph).data) };
+}
+// Cameras often make the white board look blue or yellow. Find the brightest pixels (the board)
+// and scale R,G,B so they come out neutral white/grey. Fixes "board detected as blue rune".
+let lastGains=[1,1,1];
+function applyGains(d,[gr,gg,gb]){ for(let k=0;k<d.length;k+=4){ d[k]=Math.min(255,d[k]*gr); d[k+1]=Math.min(255,d[k+1]*gg); d[k+2]=Math.min(255,d[k+2]*gb); } return d; }
+function whiteBalance(d){
+  const hist=new Uint32Array(766);
+  for(let k=0;k<d.length;k+=4) hist[d[k]+d[k+1]+d[k+2]]++;
+  let need=(d.length/4)*0.2, cut=765;
+  while(cut>0 && need>0){ need-=hist[cut]; cut--; }
+  let r=0,g=0,b=0,n=0;
+  for(let k=0;k<d.length;k+=4) if(d[k]+d[k+1]+d[k+2]>cut){ r+=d[k]; g+=d[k+1]; b+=d[k+2]; n++; }
+  if(!n) return d;
+  r/=n; g/=n; b/=n; const m=(r+g+b)/3, gr=m/r, gg=m/g, gb=m/b;
+  lastGains=[gr,gg,gb];
+  for(let k=0;k<d.length;k+=4){ d[k]=Math.min(255,d[k]*gr); d[k+1]=Math.min(255,d[k+1]*gg); d[k+2]=Math.min(255,d[k+2]*gb); }
+  return d;
+}
+
+function detectSlots(f){
+  const raw = [];
+  for(let i=0;i<3;i++){
+    const c = cfg.circles[i];
+    const cx=c.x*f.w, cy=c.y*f.h, R=(c.prof?Math.max(...c.prof):c.r)*f.w;
+    const counts=[0,0,0]; let total=0;
+    const x0=Math.max(0,cx-R|0), x1=Math.min(f.w-1,cx+R|0), y0=Math.max(0,cy-R|0), y1=Math.min(f.h-1,cy+R|0);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      const dx=x-cx, dy=y-cy, lim=edgeAt(c,Math.atan2(dy,dx))*f.w*(c.prof?0.85:0.72); // stay inside the red line
+      if(dx*dx+dy*dy>lim*lim) continue;
+      total++;
+      const k=(y*f.w+x)*4, [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
+      for(let r=0;r<3;r++) if(matchesRune(h,s,v,cfg.runes[r])) counts[r]++;
+    }
+    let best=-1, bc=0; counts.forEach((n,r)=>{ if(n>bc){bc=n;best=r;} });
+    const fill = total ? bc/total*100 : 0;
+    state.fill[i]=fill;
+    raw.push(fill >= cfg.minFill ? best : -1);
+  }
+  return raw;
+}
+
+function applyRaw(raw, now, instant){
+  let changed=false;
+  raw.forEach((v,i)=>{
+    const p = state.pending[i];
+    if(v!==p.v){ p.v=v; p.t=now; }
+    if(state.committed[i]!==p.v && (instant || now-p.t >= cfg.debounceMs)){
+      const old=state.committed[i], nu=p.v;
+      state.committed[i]=nu; changed=true; state.rot[i]=null;
+      globeAngleSent[i]=null; // [rune-globe] new stone in this slot: send its first angle to the globe straight away
+      const nm=k=>cfg.runes[k].name;
+      if(old>=0){ emit('removed', { rune:nm(old), from:SLOTS[i].id }); state.lastSeen[old]={slot:i,t:now}; }
+      if(nu>=0){
+        const ls=state.lastSeen[nu];
+        if(ls && ls.slot!==i && now-ls.t<5000) emit('moved', { rune:nm(nu), from:SLOTS[ls.slot].id, to:SLOTS[i].id, correct:nu===cfg.answer[i] });
+        else emit('placed', { rune:nm(nu), to:SLOTS[i].id, correct:nu===cfg.answer[i] });
+      }
+      emit('slot', snapshot().slots[i]);
+    }
+  });
+  if(changed){
+    const all = state.committed.every((v,i)=>!cfg.required[i] || v===cfg.answer[i]) && cfg.required.some(Boolean);
+    if(all!==state.complete){
+      state.complete=all;
+      if(all) questOpen(); else questClose(true);
+      emit(all?'stones-ready':'stones-removed', snapshot());
+    }
+    emit('state', snapshot());
+    renderSlots();
+  }
+}
+
+/* ===================== auto-detect the zones (green squares) ===================== */
+const NB=48; // angle bins for the hand-drawn shape profile
+function grabBig(w){
+  const sw=source.videoWidth||source.naturalWidth, sh=source.videoHeight||source.naturalHeight;
+  if(!sw||!sh) return null;
+  const c=document.createElement('canvas'); c.width=w; c.height=Math.round(w*sh/sw);
+  const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(source,0,0,c.width,c.height);
+  return { w:c.width, h:c.height, data:whiteBalance(x.getImageData(0,0,c.width,c.height).data) };
+}
+function autoDetect(){
+  const f = source && grabBig(800);   // higher res so thin marker lines survive
+  if(!f) return hint('Start the camera first.');
+  const W=f.w, H=f.h, N=W*H;
+  // 1) zone-colour mask, then grow it 2px so small gaps in the marker line join up
+  let m=new Uint8Array(N);
+  for(let i=0;i<N;i++){ const k=i*4, [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]); if(isZone(h,s,v)) m[i]=1; }
+  for(let pass=0;pass<2;pass++){
+    const g=m.slice();
+    for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){ const i=y*W+x; if(!m[i] && (m[i-1]||m[i+1]||m[i-W]||m[i+W])) g[i]=1; }
+    m=g;
+  }
+  // 2) connected blobs
+  const lab=new Int32Array(N).fill(-1), blobs=[], st=[];
+  for(let i=0;i<N;i++){
+    if(!m[i]||lab[i]>=0) continue;
+    const id=blobs.length, px=[]; lab[i]=id; st.push(i);
+    let minx=W,maxx=0,miny=H,maxy=0;
+    while(st.length){
+      const j=st.pop(), x=j%W, y=(j/W)|0; px.push(j);
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      for(const n of [j-1,j+1,j-W,j+W]) if(n>=0&&n<N&&m[n]&&lab[n]<0&&Math.abs((n%W)-x)<=1){ lab[n]=id; st.push(n); }
+    }
+    blobs.push({px,minx,maxx,miny,maxy});
+  }
+  // 3) keep blobs that look like a loop: decent size, roughly as wide as tall, mostly hollow
+  const minSize=W*0.04;
+  const rings=blobs.filter(b=>{
+    const bw=b.maxx-b.minx+1, bh=b.maxy-b.miny+1;
+    if(bw<minSize||bh<minSize) return false;
+    if(Math.max(bw,bh)/Math.min(bw,bh)>2.2) return false;
+    // hollow? the middle half of the box must be (almost) empty: a loop, not a solid patch
+    let inner=0, tot=0;
+    for(let y=b.miny+bh*.25|0;y<=b.miny+bh*.75;y++) for(let x=b.minx+bw*.25|0;x<=b.minx+bw*.75;x++){ tot++; if(lab[y*W+x]===blobs.indexOf(b)) inner++; }
+    return inner/tot < 0.1;
+  }).sort((a,b)=>(b.maxx-b.minx)*(b.maxy-b.miny)-(a.maxx-a.minx)*(a.maxy-a.miny)).slice(0,3);
+  if(rings.length<3) return hint(`Found ${rings.length} zone(s), need 3. Get all 3 fully in view, close any small gaps in the lines, or use "Click them myself".`);
+  // 4) centre + shape profile (distance to the inner edge of the line, per angle)
+  const found=rings.map(b=>{
+    let sx=0,sy=0; b.px.forEach(j=>{sx+=j%W; sy+=(j/W)|0;}); const cx=sx/b.px.length, cy=sy/b.px.length;
+    const bins=Array.from({length:NB},()=>[]);
+    b.px.forEach(j=>{ const dx=j%W-cx, dy=((j/W)|0)-cy; const a=Math.atan2(dy,dx); bins[Math.floor(((a+Math.PI)/(2*Math.PI))*NB)%NB].push(Math.hypot(dx,dy)); });
+    const all=b.px.map(j=>Math.hypot(j%W-cx,((j/W)|0)-cy)).sort((a,b)=>a-b), med=all[all.length>>1];
+    let prof=bins.map(d=>d.length? d.sort((a,b)=>a-b)[Math.floor(d.length*0.15)] : null); // inner edge
+    prof=prof.map((v,i)=>v ?? (prof[(i+NB-1)%NB] ?? prof[(i+1)%NB] ?? med));          // fill gaps in the line
+    return { x:cx/W, y:cy/H, r:med/W, prof:prof.map(v=>v/W) };
+  });
+  found.sort((a,b)=>a.x-b.x);
+  const order=cfg.zoneOrder||[0,1,2];
+  order.forEach((slot,k)=>{ cfg.circles[slot]=found[k]; }); save();
+  hint(`Found 3 zones: left = ${SLOTS[order[0]].name}, middle = ${SLOTS[order[1]].name}, right = ${SLOTS[order[2]].name}. Wrong? Use "Click them myself".`);
+}
+// how far from the centre the inside of slot c reaches at angle a (fraction of width)
+function edgeAt(c,a){
+  if(!c.prof) return c.r;
+  const t=((a+Math.PI)/(2*Math.PI))*NB-0.5, i=Math.floor(t), u=t-i, n=c.prof.length;
+  return c.prof[(i%n+n)%n]*(1-u)+c.prof[((i+1)%n+n)%n]*u;
+}
+
+/* ===================== clicks on the picture ===================== */
+view.addEventListener('click', e=>{
+  const rc=view.getBoundingClientRect();
+  const nx=(e.clientX-rc.left)/rc.width, ny=(e.clientY-rc.top)/rc.height;
+  const ck=state.click; if(!ck) return;
+  if(ck.kind==='zone'){
+    const f = source && grabBig(800); if(!f) return hint('Start the camera first.');
+    const px=Math.round(nx*f.w), py=Math.round(ny*f.h), got=[];
+    for(let y=py-5;y<=py+5;y++) for(let x=px-5;x<=px+5;x++){
+      if(x<0||y<0||x>=f.w||y>=f.h) continue;
+      const k=(y*f.w+x)*4; got.push(rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]));
+    }
+    got.sort((a,b)=>b[1]-a[1]); const top=got.slice(0,Math.max(3,got.length/4|0)); // the line is thin: keep the most colourful pixels
+    let sx=0,sy=0,ss=0,sv=0; top.forEach(([h,s2,v])=>{ sx+=Math.cos(h*Math.PI/180); sy+=Math.sin(h*Math.PI/180); ss+=s2; sv+=v; });
+    cfg.zone={ h:(Math.atan2(sy,sx)*180/Math.PI+360)%360, s:ss/top.length, v:sv/top.length, taught:true };
+    state.click=null; save(); hint('Zone colour learned. Now press Auto-detect.'); return;
+  }
+  if(ck.kind==='teach'){
+    const f = source && grabFrame(); if(!f) return hint('Start the camera first.');
+    const px=Math.round(nx*f.w), py=Math.round(ny*f.h);
+    let sx=0,sy=0,ss=0,sv=0,n=0;
+    for(let y=py-3;y<=py+3;y++) for(let x=px-3;x<=px+3;x++){
+      if(x<0||y<0||x>=f.w||y>=f.h) continue;
+      const k=(y*f.w+x)*4, [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
+      sx+=Math.cos(h*Math.PI/180); sy+=Math.sin(h*Math.PI/180); ss+=s; sv+=v; n++;
+    }
+    const r=cfg.runes[ck.rune];
+    r.h=(Math.atan2(sy,sx)*180/Math.PI+360)%360; r.s=ss/n; r.v=sv/n; r.taught=true;
+    if(r.s<0.2) hint(`That colour is very grey/white (saturation ${Math.round(r.s*100)}%). Detection works best with strong colours.`);
+    else hint(`${r.name} learned.`);
+    state.click=null; save(); renderRunes(); renderSlots();
+  } else if(ck.kind==='manual'){
+    const W=view.width, H=view.height;
+    ck.pts.push([nx,ny]);
+    if(ck.pts.length%2===0){
+      const [c,e2]=ck.pts.slice(-2);
+      const r=Math.hypot((e2[0]-c[0])*W,(e2[1]-c[1])*H)/W;
+      cfg.circles[ck.pts.length/2-1]={x:c[0],y:c[1],r};
+    }
+    if(ck.pts.length===6){ state.click=null; save(); hint('Circles saved.'); }
+    else manualHint();
+  }
+});
+function manualHint(){
+  const k=state.click.pts.length, s=SLOTS[k>>1];
+  hint(k%2===0 ? `Click the CENTRE of the ${s.name} zone.` : `Now click on the EDGE of the ${s.name} zone.`);
+}
+
+/* ===================== drawing ===================== */
+function draw(){
+  const W=view.width, H=view.height;
+  if(source && (source.videoWidth||source.naturalWidth)){
+    const sw=source.videoWidth||source.naturalWidth, sh=source.videoHeight||source.naturalHeight;
+    const wantH=Math.round(W*sh/sw); if(view.height!==wantH){ view.height=wantH; }
+    vctx.drawImage(source,0,0,view.width,view.height);
+    if(state.debug && frame) drawMask();
+  } else {
+    vctx.fillStyle='#120c07'; vctx.fillRect(0,0,W,H);
+    vctx.fillStyle='#b89b74'; vctx.font='22px Georgia'; vctx.textAlign='center';
+    vctx.fillText('No camera yet. Press "Start camera" (or use keys 1 / 2 / 3).',W/2,H/2);
+  }
+  const Hh=view.height;
+  cfg.circles.forEach((c,i)=>{
+    const v=state.committed[i], ok=v===cfg.answer[i];
+    const col = v<0 ? '#d9c9b0' : ok ? '#4fbf6a' : '#e2683c';
+    const cx=c.x*W, cy=c.y*Hh, r=c.r*W;
+    const shape=(k)=>{ vctx.beginPath(); for(let j=0;j<=64;j++){ const a=-Math.PI+j/64*2*Math.PI, d=edgeAt(c,a)*W*k; vctx.lineTo(cx+Math.cos(a)*d, cy+Math.sin(a)*d); } vctx.stroke(); };
+    vctx.lineWidth=4; vctx.strokeStyle=col; shape(1);
+    vctx.setLineDash([4,4]); vctx.lineWidth=1.5; shape(c.prof?0.85:0.72); vctx.setLineDash([]);
+    const top=Math.min(...Array.from({length:16},(_,j)=>Math.sin(-Math.PI+j/16*2*Math.PI)*edgeAt(c,-Math.PI+j/16*2*Math.PI)*W));
+    const label = SLOTS[i].name + (v<0 ? '' : ok ? ' ✓' : ' ✗');
+    vctx.font='bold 18px Georgia'; vctx.textAlign='center';
+    const tw=vctx.measureText(label).width+14;
+    vctx.fillStyle='rgba(30,20,12,.85)'; vctx.fillRect(cx-tw/2, cy+top-32, tw, 24);
+    vctx.fillStyle=col; vctx.fillText(label, cx, cy+top-14);
+    const ro=state.rot[i];
+    if(ro){
+      const kx=ro.x*W, ky=ro.y*Hh, a=(ro.deg+cfg.rotZero[i])*Math.PI/180, L=r*0.7;
+      vctx.globalAlpha = ro.lost>5 ? 0.45 : 1;
+      vctx.strokeStyle='#59b7ff'; vctx.lineWidth=3; vctx.beginPath(); vctx.moveTo(kx,ky); vctx.lineTo(kx+Math.sin(a)*L, ky-Math.cos(a)*L); vctx.stroke();
+      vctx.fillStyle='#59b7ff'; vctx.beginPath(); vctx.arc(ro.px*W, ro.py*Hh, 5, 0, Math.PI*2); vctx.fill();
+      const lt=`${Math.round(ro.deg)}° · pos ${ro.step}`; vctx.font='bold 14px Georgia'; const lw=vctx.measureText(lt).width+12;
+      vctx.fillStyle='rgba(20,40,70,.85)'; vctx.fillRect(cx-lw/2, cy-9, lw, 20); vctx.fillStyle='#d8f0ff'; vctx.fillText(lt, cx, cy+6); vctx.globalAlpha=1;
+    }
+    if(!state.sim){ const t=Math.round(state.fill[i])+'%'; vctx.font='13px Georgia'; vctx.fillStyle='rgba(30,20,12,.8)'; const bt=edgeAt(c,Math.PI/2)*W; vctx.fillRect(cx-22,cy+bt+5,44,18); vctx.fillStyle="#fff"; vctx.fillText(t, cx, cy+bt+19); }
+  });
+}
+function drawMask(){
+  const f=frame, img=pctx.createImageData(f.w,f.h);
+  for(let k=0;k<f.data.length;k+=4){
+    const [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
+    let out=[0,0,0,170];
+    if(isZone(h,s,v)) out=[60,255,60,255];
+    else for(let r=0;r<3;r++) if(matchesRune(h,s,v,cfg.runes[r])){ out=[255,255,255,255]; break; }
+    img.data.set(out,k);
+  }
+  pctx.putImageData(img,0,0);
+  vctx.globalAlpha=.85; vctx.drawImage(proc,0,0,view.width,view.height); vctx.globalAlpha=1;
+}
+
+/* ===================== main loop ===================== */
+
+/* ===================== knob rotation (experimental) =====================
+   Each rune needs ONE dark dot (black marker/sticker) on its top face, off-centre.
+   Angle = direction from the centre of the coloured blob to the dark dot, seen from the camera above.
+   0° = pointing up in the camera picture, clockwise. "Zero knobs" makes the current position 0. */
+const rotCv=document.createElement('canvas'), rotCx=rotCv.getContext('2d',{willReadFrequently:true});
+// Cut out just this slot from the camera image at FULL resolution (the dot is tiny, every pixel helps).
+function grabRot(i){
+  const sw=source.videoWidth||source.naturalWidth, sh=source.videoHeight||source.naturalHeight;
+  if(!sw||!sh) return null;
+  const c=cfg.circles[i], Rn=(c.prof?Math.max(...c.prof):c.r)*1.05;   // radius as fraction of width
+  const R=Rn*sw, x0=Math.max(0,c.x*sw-R), y0=Math.max(0,c.y*sh-R);
+  const cw=Math.min(sw-x0,2*R), ch=Math.min(sh-y0,2*R); if(cw<4||ch<4) return null;
+  const sc=Math.max(1, Math.max(cw,ch)/420);                       // cap the crop at ~420 px
+  const w=Math.round(cw/sc), h=Math.round(ch/sc);
+  if(rotCv.width!==w||rotCv.height!==h){ rotCv.width=w; rotCv.height=h; }
+  rotCx.drawImage(source,x0,y0,cw,ch,0,0,w,h);
+  return { w, h, data:applyGains(rotCx.getImageData(0,0,w,h).data, lastGains),
+           cx:(c.x*sw-x0)/sc, cy:(c.y*sh-y0)/sc, pw:sw/sc,               // slot centre in crop px, crop px per width-unit
+           norm:(x,y)=>[(x0+x*sc)/sw, (y0+y*sc)/sh] };
+}
+function measureRotation(f,i,ri){
+  const c=cfg.circles[i], rune=cfg.runes[ri];
+  const cx=f.cx, cy=f.cy;
+  const inSlot=(x,y)=>{ const dx=x-cx, dy=y-cy, lim=edgeAt(c,Math.atan2(dy,dx))*f.pw*1.05; return dx*dx+dy*dy<=lim*lim; };
+  let sx=0,sy=0,n=0;
+  for(let y=0;y<f.h;y++) for(let x=0;x<f.w;x++){
+    if(!inSlot(x,y)) continue;
+    const k=(y*f.w+x)*4, [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
+    if(matchesRune(h,s,v,rune)){ sx+=x; sy+=y; n++; }
+  }
+  if(n<40) return null;
+  const rx=sx/n, ry=sy/n, rr=Math.sqrt(n/Math.PI);       // blob centre + "equivalent radius"
+  const dark=Math.min(0.42, rune.v*0.6);                 // "dark" relative to how bright the rune itself is
+  let mx=0,my=0,m=0; const lim=rr*0.9;
+  for(let y=Math.max(0,ry-lim|0);y<=Math.min(f.h-1,ry+lim|0);y++) for(let x=Math.max(0,rx-lim|0);x<=Math.min(f.w-1,rx+lim|0);x++){
+    const dx=x-rx, dy=y-ry; if(dx*dx+dy*dy>lim*lim) continue;
+    const k=(y*f.w+x)*4, [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
+    if(v<dark && !matchesRune(h,s,v,rune)){ mx+=x; my+=y; m++; }
+  }
+  if(m<Math.max(3,n*0.004)) return null;                // no marker visible (covered by a hand, too small, …)
+  mx/=m; my/=m;
+  if(Math.hypot(mx-rx,my-ry)<rr*0.15) return null;     // marker too close to the centre: direction unclear
+  const raw=(Math.atan2(mx-rx, -(my-ry))*180/Math.PI+360)%360;
+  const [nx,ny]=f.norm(rx,ry), [px,py]=f.norm(mx,my);
+  return { raw, x:nx, y:ny, px, py };
+}
+const globeAngleSent = [null,null,null]; // [rune-globe] last knob angle sent to the globe, per slot
+function updateRotation(){
+  if(!state.committed.some(v=>v>=0)) return;
+  state.committed.forEach((ri,i)=>{
+    if(ri<0){ state.rot[i]=null; return; }
+    const f=grabRot(i); if(!f) return;
+    const r=measureRotation(f,i,ri); if(!r){ if(state.rot[i]) state.rot[i].lost=(state.rot[i].lost||0)+1; return; }     // keep the last good value while the marker is hidden
+    const deg=(r.raw-cfg.rotZero[i]+360)%360, prev=state.rot[i];
+    let sm=deg;
+    if(prev){ const d=((deg-prev.deg+540)%360)-180; sm=(prev.deg+d*0.5+360)%360; } // smooth jitter
+    const size=360/cfg.rotSteps, cand=Math.round(sm/size)%cfg.rotSteps;
+    let step=prev?prev.step:cand;
+    if(cand!==step){ const off=Math.abs(((sm-cand*size+540)%360)-180); if(off<size*0.35) step=cand; } // hysteresis
+    state.rot[i]={ deg:sm, raw:r.raw, step, x:r.x, y:r.y, px:r.px, py:r.py, lost:0 };
+    if(!prev || prev.step!==step) emit('rotate', { rune:cfg.runes[ri].name, slot:SLOTS[i].id, angle:Math.round(sm), step });
+    // [rune-globe] 'rotate' only fires per 36° step; the globe dial needs finer updates, so also send every 3° of turn.
+    const sentA = globeAngleSent[i];
+    if(sentA===null || Math.abs(((sm-sentA+540)%360)-180) >= 3){
+      globeAngleSent[i] = sm;
+      emit('angle', { slot:SLOTS[i].id, angle:Math.round(sm) });
+    }
+  });
+}
+function zeroKnobs(){
+  state.rot.forEach((r,i)=>{ if(r) cfg.rotZero[i]=r.raw; });
+  save(); state.rot=[null,null,null]; hint('Knobs zeroed: their current positions now count as 0°.');
+}
+
+function loop(now){
+  if(!state.sim && source && now-lastProc>90){
+    lastProc=now;
+    frame=grabFrame();
+    if(frame){ applyRaw(detectSlots(frame), now, false); updateRotation(); }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ===================== UI ===================== */
+function hint(t){ document.getElementById('hint').textContent=t||''; }
+function setMode(){
+  document.getElementById('mode').textContent = state.sim ? 'SIMULATION (keys)' : source ? 'CAMERA' : 'no camera';
+}
+function renderSlots(){
+  document.getElementById('slots').innerHTML = SLOTS.map((s,i)=>{
+    const v=state.committed[i], ok=v===cfg.answer[i];
+    const want=cfg.runes[cfg.answer[i]];
+    return `<div class="slot ${v<0?'':ok?'ok':'bad'}">
+      <div><b>${s.name}</b> <small>${s.place}</small><br>
+      <small>needs <span class="sw" style="background:${runeCss(want)}"></span> ${want.name}</small></div>
+      <div>${v<0?'<small>empty</small>':`<span class="sw" style="background:${runeCss(cfg.runes[v])}"></span> ${ok?'✓':'✗'}`}</div></div>`;
+  }).join('') + `<div class="slot ${state.complete?'ok':''}"><b>${
+    Q.stage==='done'?'COMPLETE · snake home':state.complete?'Stones placed · pick the channel':'Place the stones'}</b></div>`;
+}
+function renderRunes(){
+  document.getElementById('runes').innerHTML = cfg.runes.map((r,i)=>`
+    <div class="row"><span class="sw" style="background:${runeCss(r)}"></span>
+    <input type="text" value="${r.name.replace(/"/g,'&quot;')}" data-name="${i}" style="width:130px">
+    <button data-teach="${i}">${r.taught?'Re-teach':'Teach'}</button></div>`).join('');
+}
+function renderAnswers(){
+  document.getElementById('answers').innerHTML = SLOTS.map((s,i)=>`
+    <div class="row"><label style="width:90px">${s.name}</label>
+    <select data-ans="${i}">${cfg.runes.map((r,j)=>`<option value="${j}" ${cfg.answer[i]===j?'selected':''}>${r.name}</option>`).join('')}</select>
+    <label><input type="checkbox" data-req="${i}" ${cfg.required[i]?'checked':''}> needed</label></div>`).join('')
+    + `<div class="row"><label style="width:90px">Correct channel</label>
+       <input type="number" id="chanIn" min="1" max="10" value="${cfg.channel}" style="width:60px;font:inherit;color:var(--text);background:#3a2817;border:1px solid var(--edge);border-radius:6px;padding:5px"></div>
+       <div class="row"><label><input type="checkbox" id="questIn" ${cfg.questOn?'checked':''}> Show the demo channel screen</label></div>
+       <label>"needed" stones open the channel screen when they're in place.</label>`;
+}
+document.getElementById('runes').addEventListener('click',e=>{
+  const i=e.target.dataset.teach; if(i===undefined) return;
+  state.click={kind:'teach',rune:+i}; hint(`Click on the ${cfg.runes[i].name} in the picture.`);
+});
+document.getElementById('runes').addEventListener('change',e=>{
+  const i=e.target.dataset.name; if(i===undefined) return;
+  cfg.runes[i].name=e.target.value; save(); renderAnswers(); renderSlots();
+});
+document.getElementById('answers').addEventListener('change',e=>{
+  if(e.target.id==='questIn'){ cfg.questOn=e.target.checked; save(); return; }
+  if(e.target.id==='chanIn'){ cfg.channel=Math.min(10,Math.max(1,+e.target.value||1)); e.target.value=cfg.channel; save(); return; }
+  if(e.target.dataset.req!==undefined){ cfg.required[+e.target.dataset.req]=e.target.checked; save(); state.committed=[-2,-2,-2]; return; }
+  cfg.answer[+e.target.dataset.ans]=+e.target.value; save(); renderSlots();
+  state.committed=[-2,-2,-2]; // force re-evaluation
+});
+document.getElementById('startBtn').onclick=()=>{ state.sim=false; startCamera(); };
+document.getElementById('camSel').onchange=()=>{ if(stream) startCamera(); };
+document.getElementById('autoBtn').onclick=autoDetect;
+document.getElementById('zoneTeachBtn').onclick=()=>{ state.click={kind:'zone'}; hint('Click right on one of the green zone lines in the picture.'); };
+document.getElementById('manualBtn').onclick=()=>{ state.click={kind:'manual',pts:[]}; manualHint(); };
+document.getElementById('debugBtn').onclick=()=>{ state.debug=!state.debug; };
+document.getElementById('resetBtn').onclick=()=>{ cfg=structuredClone(DEFAULTS); save(); renderAll(); hint('Reset to defaults.'); };
+
+function slider(id, key, fmt){
+  const el=document.getElementById(id), out=document.getElementById(id+'V');
+  el.value=cfg[key]; out.textContent=fmt(cfg[key]);
+  el.oninput=()=>{ cfg[key]=+el.value; out.textContent=fmt(cfg[key]); save(); };
+}
+function renderAll(){
+  renderSlots(); renderRunes(); renderAnswers();
+  slider('hueTol','hueTol',v=>v+'°'); slider('minFill','minFill',v=>v+'%'); slider('debounce','debounceMs',v=>(v/1000).toFixed(1)+'s');
+}
+
+/* ===================== keyboard backup ===================== */
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT' || e.target.tagName==='SELECT') return;
+  const k=e.key.toLowerCase();
+  if(Q.open){
+    if(k==='escape'){ questClose(false); Q.dismissed=true; }
+    else if(/^[0-9]$/.test(k)) questPick(k==='0'?10:+k);
+    else if(k==='r' && Q.stage==='done') questOpen(true);
+    return;
+  }
+  if(['1','2','3','a','0'].includes(k)){
+    if(!state.sim){ state.sim=true; state.simSlots=state.committed.map(v=>Math.max(-1,v)); setMode(); }
+    if(k==='a') state.simSlots=[...cfg.answer];
+    else if(k==='0') state.simSlots=[-1,-1,-1];
+    else { const i=+k-1; state.simSlots[i] = state.simSlots[i]>=2 ? -1 : state.simSlots[i]+1; }
+    applyRaw(state.simSlots, performance.now(), true);
+  } else if(k==='k'){ state.sim=false; setMode(); hint(source?'':'Press "Start camera".'); }
+  else if(k==='d'){ state.debug=!state.debug; }
+  else if(k==='escape'){ state.click=null; hint(''); }
+  else if(k==='c' && state.complete){ Q.dismissed=false; questOpen(); }
+  else if(k==='g') toggleGlobe();
+});
+
+/* ===================== globe view (globe/ shown full screen in this same window) ===================== */
+// The globe only listens to the events above, so it never needs its own camera or detection.
+const globeView = document.getElementById('globeView');
+function toggleGlobe(){
+  if(!globeView.src) globeView.src = 'globe/';          // load it the first time it is opened
+  globeView.classList.toggle('show');
+}
+globeView.addEventListener('load', () => emit('state', snapshot()));  // tell the globe the current board right away
+document.getElementById('globeBtn').onclick = toggleGlobe;
+
+
+/* ===================== channel quest: 10 pathways, pick the right one, snake travels ===================== */
+const Q = { open:false, stage:'idle', dismissed:false, hover:-1, wrong:{ch:-1,t:0}, picked:-1, t0:0, paths:[], snake:null, done:0 };
+const qcv=document.getElementById('questCv'), qx=qcv.getContext('2d');
+function qSize(){ const d=devicePixelRatio||1; qcv.width=innerWidth*d; qcv.height=innerHeight*d; qx.setTransform(d,0,0,d,0,0); qBuild(); }
+addEventListener('resize',()=>{ if(Q.open) qSize(); });
+function stones(){
+  const idx=SLOTS.map((_,i)=>i).filter(i=>cfg.required[i]);
+  return { from:SLOTS[idx[0]??0], to:SLOTS[idx[idx.length-1]??2] };
+}
+function bez(p,t){ const u=1-t; return [u*u*u*p[0][0]+3*u*u*t*p[1][0]+3*u*t*t*p[2][0]+t*t*t*p[3][0], u*u*u*p[0][1]+3*u*u*t*p[1][1]+3*u*t*t*p[2][1]+t*t*t*p[3][1]]; }
+function qBuild(){
+  const W=innerWidth, H=innerHeight, A=[W*.13,H*.56], B=[W*.87,H*.56];
+  Q.A=A; Q.B=B; Q.sr=Math.min(W,H)*.075;
+  Q.paths=Array.from({length:10},(_,i)=>{
+    const off=(i-4.5)/4.5*H*.36, wob=(i%2?1:-1)*W*.03;
+    const P=[A,[W*.36+wob,A[1]+off*1.25],[W*.64-wob,B[1]+off*1.25],B];
+    const pts=Array.from({length:240},(_,j)=>bez(P,j/239));
+    return { P, pts, mid:bez(P,.5) };
+  });
+}
+function questOpen(restart){
+  if((Q.dismissed || !cfg.questOn) && !restart) return;
+  Q.open=true; if(restart || Q.stage==='idle'){ Q.stage='channels'; Q.picked=-1; Q.snake=null; Q.wrong={ch:-1,t:0}; }
+  document.getElementById('quest').classList.add('show'); qSize();
+  const {from,to}=stones();
+  qText(`${from.name.toUpperCase()} ⟷ ${to.name.toUpperCase()}`, Q.stage==='done' ? '' : `The stones are in place. Which channel carries the message from ${from.name} to ${to.name}?`);
+  emit('channels-open', {});
+}
+function questClose(reset){
+  Q.open=false; document.getElementById('quest').classList.remove('show');
+  if(reset){ Q.stage='idle'; Q.dismissed=false; Q.snake=null; }
+  renderSlots();
+}
+function qText(t,m){ document.getElementById('questTitle').textContent=t; document.getElementById('questMsg').textContent=m; }
+function questPick(ch){
+  if(Q.stage!=='channels') return;
+  const {to}=stones();
+  const ok = ch===cfg.channel;
+  emit('channel', { channel:ch, correct:ok });
+  if(!ok){ Q.wrong={ch,t:performance.now()}; qText(`CHANNEL ${ch}`, `Only static… ${to.name} does not answer. Try another channel.`); buzz(); return; }
+  Q.picked=ch; Q.stage='snake'; Q.t0=performance.now();
+  // snake route = chosen path, then 2.3 turns coiling around the target stone
+  const path=Q.paths[ch-1].pts, B=Q.B, r0=Q.sr*1.75, r1=Q.sr*1.2;
+  const last=path[path.length-1], prev=path[path.length-12];
+  let a0=Math.atan2(prev[1]-B[1], prev[0]-B[0]);
+  const route=path.slice(0,-10);
+  for(let j=0;j<=200;j++){ const t=j/200, a=a0+t*Math.PI*2*2.3, r=r0+(r1-r0)*t; route.push([B[0]+Math.cos(a)*r, B[1]+Math.sin(a)*r]); }
+  const cum=[0]; for(let j=1;j<route.length;j++) cum.push(cum[j-1]+Math.hypot(route[j][0]-route[j-1][0],route[j][1]-route[j-1][1]));
+  const coilLen=cum[cum.length-1]-cum[route.length-202];
+  Q.snake={ route, cum, total:cum[cum.length-1], len:coilLen*1.05+Q.sr*1.5, dur:5200 };
+  qText(`CHANNEL ${ch}`, `Connection found! Jörmungandr is travelling to ${to.name}…`);
+  rumble();
+}
+qcv.addEventListener('mousemove',e=>{ Q.hover=qNearest(e.clientX,e.clientY); });
+qcv.addEventListener('click',e=>{ const i=qNearest(e.clientX,e.clientY); if(i>=0) questPick(i+1); });
+function qNearest(x,y){
+  if(Q.stage!=='channels') return -1;
+  let best=-1,bd=22*22;
+  Q.paths.forEach((p,i)=>{ for(let j=20;j<p.pts.length-20;j+=3){ const d=(p.pts[j][0]-x)**2+(p.pts[j][1]-y)**2; if(d<bd){bd=d;best=i;} } });
+  return best;
+}
+function pointAt(sn,d){ // point along route at distance d
+  const c=sn.cum; let lo=0,hi=c.length-1; d=Math.max(0,Math.min(sn.total,d));
+  while(hi-lo>1){ const m=(lo+hi)>>1; if(c[m]<d) lo=m; else hi=m; }
+  const u=(d-c[lo])/((c[hi]-c[lo])||1), A=sn.route[lo], B=sn.route[hi];
+  return [A[0]+(B[0]-A[0])*u, A[1]+(B[1]-A[1])*u];
+}
+function drawStone(x,y,r,label,glow){
+  qx.save();
+  if(glow){ qx.shadowColor='#59b7ff'; qx.shadowBlur=40; }
+  qx.fillStyle='#8d8578'; qx.strokeStyle='#4b4439'; qx.lineWidth=3;
+  qx.beginPath(); qx.moveTo(x-r*.75,y+r); qx.quadraticCurveTo(x-r*.95,y-r*.2,x-r*.45,y-r*1.05);
+  qx.quadraticCurveTo(x,y-r*1.35,x+r*.5,y-r*1.0); qx.quadraticCurveTo(x+r*.95,y-r*.1,x+r*.75,y+r); qx.closePath(); qx.fill(); qx.stroke();
+  qx.shadowBlur=0; qx.fillStyle='#3c352c'; qx.font=`${r*.42}px Georgia`; qx.textAlign='center';
+  qx.fillText('ᚼᛅᚱᛅᛚᛏᚱ'.slice(0,3),x,y-r*.25); qx.fillText('ᚴᚢᚾᚢᚴᛦ'.slice(0,3),x,y+r*.35);
+  qx.fillStyle='#f1e3c8'; qx.font=`bold ${Math.max(16,r*.32)}px Georgia`; qx.fillText(label,x,y+r*1.45);
+  qx.restore();
+}
+function drawSnake(sn,head){
+  const step=6, n=Math.floor(Math.min(sn.len,head)/step);
+  for(let k=n;k>=0;k--){
+    const d=head-k*step; if(d<0) continue;
+    const p=pointAt(sn,d), f=1-k/Math.max(1,sn.len/step);   // f: 0 tail → 1 head
+    const w=Q.sr*(.08+.28*Math.sin(Math.min(1,f*1.15)*Math.PI*.55));
+    qx.fillStyle = k%3===0 ? '#1f5e3a' : '#2f8a52';
+    qx.beginPath(); qx.arc(p[0],p[1],w,0,Math.PI*2); qx.fill();
+  }
+  const p=pointAt(sn,head), q=pointAt(sn,head-8), a=Math.atan2(p[1]-q[1],p[0]-q[0]), hw=Q.sr*.36;
+  qx.save(); qx.translate(p[0],p[1]); qx.rotate(a);
+  qx.fillStyle='#2f8a52'; qx.beginPath(); qx.ellipse(hw*.4,0,hw*1.1,hw*.75,0,0,Math.PI*2); qx.fill();
+  qx.fillStyle='#f5d142'; [-1,1].forEach(s=>{ qx.beginPath(); qx.arc(hw*.8,s*hw*.38,hw*.17,0,Math.PI*2); qx.fill(); });
+  qx.strokeStyle='#c0392b'; qx.lineWidth=2; qx.beginPath(); qx.moveTo(hw*1.45,0); qx.lineTo(hw*1.9,0); qx.lineTo(hw*2.05,-hw*.15); qx.moveTo(hw*1.9,0); qx.lineTo(hw*2.05,hw*.15); qx.stroke();
+  qx.restore();
+}
+function questDraw(now){
+  if(!Q.open){ requestAnimationFrame(questDraw); return; }
+  const W=innerWidth, H=innerHeight;
+  const g=qx.createRadialGradient(W/2,H/2,H*.1,W/2,H/2,W*.7); g.addColorStop(0,'#3b2814'); g.addColorStop(1,'#120b05');
+  qx.fillStyle=g; qx.fillRect(0,0,W,H);
+  const {from,to}=stones();
+  const wrongOn = Q.wrong.ch>0 && now-Q.wrong.t<1200;
+  Q.paths.forEach((p,i)=>{
+    const ch=i+1, isPick=Q.picked===ch, isWrong=wrongOn&&Q.wrong.ch===ch, hov=Q.hover===i;
+    if(Q.stage!=='channels' && !isPick) qx.globalAlpha=.15;
+    qx.lineWidth=isPick?8:hov?7:4; qx.strokeStyle=isWrong?'#e2683c':isPick?'#8fd3ff':'#59b7ff';
+    qx.shadowColor=qx.strokeStyle; qx.shadowBlur=hov||isPick?22:10;
+    qx.beginPath(); p.pts.forEach((pt,j)=>j?qx.lineTo(pt[0],pt[1]):qx.moveTo(pt[0],pt[1])); qx.stroke();
+    qx.shadowBlur=0;
+    if(Q.stage==='channels'){ // travelling signal dots
+      for(let k=0;k<3;k++){ const t=((now/2600)+i*.071+k/3)%1, pt=p.pts[Math.floor(t*(p.pts.length-1))];
+        qx.fillStyle='#d8f0ff'; qx.beginPath(); qx.arc(pt[0],pt[1],3,0,Math.PI*2); qx.fill(); }
+    }
+    const [mx,my]=p.mid;
+    qx.fillStyle=isWrong?'#e2683c':'#1d140b'; qx.strokeStyle=isWrong?'#e2683c':'#59b7ff'; qx.lineWidth=2;
+    qx.beginPath(); qx.arc(mx,my,15,0,Math.PI*2); qx.fill(); qx.stroke();
+    qx.fillStyle='#f1e3c8'; qx.font='bold 14px Georgia'; qx.textAlign='center'; qx.textBaseline='middle'; qx.fillText(ch,mx,my+1);
+    qx.textBaseline='alphabetic'; qx.globalAlpha=1;
+  });
+  drawStone(Q.A[0],Q.A[1],Q.sr,from.name,true);
+  drawStone(Q.B[0],Q.B[1],Q.sr,to.name,Q.stage==='done');
+  if(Q.snake){
+    const sn=Q.snake, t=Math.min(1,(now-Q.t0)/sn.dur), e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    drawSnake(sn, e*sn.total);
+    if(t>=1 && Q.stage==='snake'){
+      Q.stage='done'; qText('JÖRMUNGANDR AWAKENS', `Channel ${Q.picked} connected ${from.name} and ${to.name}. Harald's world is reconnected.`);
+      emit('complete', snapshot()); renderSlots(); rumble();
+    }
+  }
+  if(Q.snake){ // keep the target name readable on top of the coiled snake
+    qx.font=`bold ${Math.max(16,Q.sr*.32)}px Georgia`; qx.textAlign='center';
+    const ly=Q.B[1]+Q.sr*2.25, tw=qx.measureText(to.name).width+16;
+    qx.fillStyle='rgba(20,13,7,.85)'; qx.fillRect(Q.B[0]-tw/2, ly-Q.sr*.36, tw, Q.sr*.5);
+    qx.fillStyle='#f1e3c8'; qx.fillText(to.name, Q.B[0], ly);
+  }
+  document.getElementById('questBot').textContent = Q.stage==='done'
+    ? 'R = play again · Esc closes · remove a stone to start over'
+    : 'Click a pathway or press 1 – 9, 0 = 10 · Esc closes · remove a stone to start over';
+  requestAnimationFrame(questDraw);
+}
+requestAnimationFrame(questDraw);
+function buzz(){
+  try{ const ac=new (window.AudioContext||window.webkitAudioContext)(), o=ac.createOscillator(), g=ac.createGain();
+    o.type='square'; o.frequency.value=90; g.gain.value=.05; g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.5);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+.5); }catch(e){}
+}
+
+/* ===================== little win sound ===================== */
+function rumble(){
+  try{
+    const ac=new (window.AudioContext||window.webkitAudioContext)();
+    [55,82.4,110].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.type='sawtooth'; o.frequency.value=f; g.gain.setValueAtTime(0,ac.currentTime);
+      g.gain.linearRampToValueAtTime(.08,ac.currentTime+.3+i*.2); g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+2.5);
+      o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+2.6);
+    });
+  }catch(e){}
+}
+
+/* ===================== start ===================== */
+/* ===================== settings file ===================== */
+function applySettings(obj){ cfg=Object.assign(structuredClone(DEFAULTS), obj); save(); renderAll(); state.committed=[-2,-2,-2]; }
+document.getElementById('zeroBtn').onclick=zeroKnobs;
+document.getElementById('saveFileBtn').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'}));
+  a.download='rune-settings.json'; a.click();
+  hint('Saved rune-settings.json to Downloads. Move it into the rune-vision folder to keep it with the project.');
+};
+document.getElementById('loadFileBtn').onclick=()=>document.getElementById('loadFileIn').click();
+document.getElementById('loadFileIn').onchange=async e=>{
+  try{ applySettings(JSON.parse(await e.target.files[0].text())); hint('Settings loaded from file.'); }
+  catch(err){ hint('That file could not be read: '+err.message); }
+};
+// first run in this browser (nothing saved yet)? try rune-settings.json next to this page
+if(!localStorage.getItem(STORE_KEY)){
+  fetch('rune-settings.json',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+    .then(j=>{ if(j){ applySettings(j); hint('Loaded settings from rune-settings.json.'); } }).catch(()=>{});
+}
+
+renderAll(); setMode(); listCams();
+const qp=new URLSearchParams(location.search);
+if(qp.get('img')) useImage(qp.get('img'));         // testing: index.html?img=board.png
+else if(navigator.mediaDevices?.getUserMedia) startCamera();
+else hint('This browser blocks the camera here. See README (use Chrome, or run the local server).');
+requestAnimationFrame(loop);
+window.runeVision={ state, cfg:()=>cfg, snapshot, autoDetect };
+</script>
+</body>
+</html>
