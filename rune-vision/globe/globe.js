@@ -127,4 +127,7 @@ function onEvent(msg) {
 }
 
 new BroadcastChannel('rune-board').onmessage = e => onEvent(e.data);
+
+// "Play again" button at the end (the Arduino lock button does the same, see quest.onLock).
+document.getElementById('panel-again').addEventListener('click', () => { quest.restart(); refresh(); });
 refresh();

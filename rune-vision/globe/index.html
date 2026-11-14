@@ -36,6 +36,12 @@
   }
   #panel-rune-label { margin: 0; font-size: clamp(18px, 1.7vw, 24px); }
   #panel-rune-label small { display: block; color: var(--muted); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+  #panel-again {
+    align-self: flex-start; padding: 12px 28px; font: inherit; font-size: 20px; letter-spacing: 2px; cursor: pointer;
+    color: #1a110a; background: var(--gold); border: none; border-radius: 6px;
+  }
+  #panel-again:hover { filter: brightness(1.1); }
+  #panel-again[hidden] { display: none; }
   #panel-hint { margin: 0; color: var(--muted); font-size: 16px; }
   #panel-feedback { margin: 0; font-size: 19px; line-height: 1.4; min-height: 1.4em; }
   #panel-feedback.right { color: #9fd36a; }
@@ -64,6 +70,7 @@
     </div>
     <p id="panel-text"></p>
     <ol id="panel-answers"></ol>
+    <button id="panel-again" hidden>Play again</button>
     <p id="panel-hint"></p>
     <p id="panel-feedback"></p>
   </div>

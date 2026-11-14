@@ -11,6 +11,7 @@ const el = {
   answers:  document.getElementById('panel-answers'),
   hint:     document.getElementById('panel-hint'),
   feedback: document.getElementById('panel-feedback'),
+  again:    document.getElementById('panel-again'),
   rune:      document.getElementById('panel-rune'),
   runeStone: document.getElementById('panel-rune-stone'),
   runeLabel: document.getElementById('panel-rune-label'),
@@ -22,11 +23,23 @@ const DIRECTIONS = ['dot up', 'dot right', 'dot down', 'dot left'];
 export function renderPanel(quest, choice) {
   const story = quest.current;
 
+  el.again.hidden = quest.phase !== 'finished';
+
   if (quest.phase === 'finished') {
     el.step.textContent = 'The journey is complete';
     el.text.textContent = 'All runestones are bound together. Jörmungandr encircles the world!';
     el.answers.innerHTML = '';
-    el.hint.textContent = 'Take all runes off the map to start again.';
+    el.hint.textContent = 'Press the lock button (or the button above) to play again.';
+    showRune(null);
+    showFeedback(null);
+    return;
+  }
+
+  if (quest.phase === 'clear') {
+    el.step.textContent = 'A new journey';
+    el.text.textContent = 'Take all runes off the map to begin.';
+    el.answers.innerHTML = '';
+    el.hint.textContent = '';
     showRune(null);
     showFeedback(null);
     return;
