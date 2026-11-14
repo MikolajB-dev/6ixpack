@@ -1,0 +1,46 @@
+/*
+ * Alternative wiring: PN532 reader on I2C21.
+ * Use it by adding this file as an "Extra Devicetree overlay" in the
+ * VS Code build configuration (or: west build ... -- -DEXTRA_DTC_OVERLAY_FILE=pn532.overlay).
+ *
+ * Set the PN532 module's switches to I2C mode (red "PN532 NFC V3" board:
+ * switch 1 = ON, switch 2 = OFF), then power-cycle it.
+ *
+ *   PN532 pin  ->  nRF54L15 DK pin
+ *   SCL        ->  P1.11
+ *   SDA        ->  P1.12
+ *   VCC        ->  VDD (3.3 V)
+ *   GND        ->  GND
+ *
+ * IMPORTANT: set the DK's VDD to 3.3 V in nRF Connect "Board Configurator".
+ */
+
+&spi21 {
+	status = "disabled";
+};
+
+&pinctrl {
+	i2c21_default: i2c21_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 11)>,
+				<NRF_PSEL(TWIM_SDA, 1, 12)>;
+			bias-pull-up;
+		};
+	};
+
+	i2c21_sleep: i2c21_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SCL, 1, 11)>,
+				<NRF_PSEL(TWIM_SDA, 1, 12)>;
+			low-power-enable;
+		};
+	};
+};
+
+&i2c21 {
+	status = "okay";
+	pinctrl-0 = <&i2c21_default>;
+	pinctrl-1 = <&i2c21_sleep>;
+	pinctrl-names = "default", "sleep";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};

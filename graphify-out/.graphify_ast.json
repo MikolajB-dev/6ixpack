@@ -1,0 +1,13 @@
+{
+  "nodes": [],
+  "edges": [],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "failed_sources": [],
+  "skipped_sources": [
+    "/Users/marksoborskis/Desktop/6ixpack/.claude/settings.json"
+  ],
+  "extracted_sources": [
+    "/Users/marksoborskis/Desktop/6ixpack/.claude/settings.json"
+  ]
+}
