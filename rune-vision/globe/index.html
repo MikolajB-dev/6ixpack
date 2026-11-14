@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rune Globe</title>
+<style>
+  :root { --panel: min(520px, 40vw); --gold: #e3b955; --text: #f3e4c4; --muted: #b9a37d; --line: #8a6a3a; }
+  html, body { margin: 0; height: 100%; background: #140d07; overflow: hidden; font-family: Georgia, serif; color: var(--text); }
+
+  /* The globe takes the right side, the story card the left side. */
+  #globe { position: absolute; top: 0; bottom: 0; right: 0; left: var(--panel); }
+
+  #panel {
+    position: absolute; top: 0; bottom: 0; left: 0; width: var(--panel); box-sizing: border-box;
+    padding: 48px 36px; display: flex; flex-direction: column; justify-content: center; gap: 18px;
+    background: linear-gradient(90deg, #22160c, #1a110a 85%, rgba(20,13,7,0));
+    border-right: 1px solid #3a2817;
+  }
+  #panel-step { margin: 0; color: var(--gold); font-size: 15px; letter-spacing: 4px; text-transform: uppercase; }
+  #panel-text { margin: 0; font-size: clamp(22px, 2.3vw, 32px); line-height: 1.35; }
+  #panel-answers { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  #panel-answers li {
+    padding: 12px 16px; border: 1px solid var(--line); border-radius: 6px; font-size: clamp(16px, 1.5vw, 20px);
+    background: rgba(255, 230, 180, 0.03); transition: background .2s, border-color .2s;
+  }
+  #panel-answers li b { color: var(--gold); margin-right: 8px; }
+  #panel-answers li small { float: right; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  #panel-answers li.selected { background: rgba(227, 185, 85, 0.22); border-color: var(--gold); }
+  #panel-hint { margin: 0; color: var(--muted); font-size: 16px; }
+  #panel-feedback { margin: 0; font-size: 19px; line-height: 1.4; min-height: 1.4em; }
+  #panel-feedback.right { color: #9fd36a; }
+  #panel-feedback.clue  { color: #f0a35b; }
+  #panel-feedback.wrong { color: #e0664a; }
+  #panel-feedback.info  { color: var(--muted); }
+
+  /* Place names on the globe */
+  .place-label {
+    color: var(--text); font-size: 17px; letter-spacing: 2px; font-variant: small-caps; text-shadow: 0 0 3px #140d07, 0 0 8px #140d07, 0 0 14px #140d07;
+    transform: translate(-50%, -140%); pointer-events: none; white-space: nowrap;
+  }
+  /* Small status in the corner: are we receiving events from the vision page? */
+  #link { position: absolute; top: 12px; right: 16px; font-size: 13px; opacity: .6; }
+</style>
+</head>
+<body>
+  <div id="globe"></div>
+
+  <!-- The story card. panel.js fills it in. -->
+  <div id="panel">
+    <p id="panel-step"></p>
+    <p id="panel-text"></p>
+    <ol id="panel-answers"></ol>
+    <p id="panel-hint"></p>
+    <p id="panel-feedback"></p>
+  </div>
+
+  <div id="link">waiting for Rune Vision…</div>
+
+  <!-- Load order matters: three.js first, then Globe.gl (uses that same three.js), then our code.
+       All files are local copies, so it works without internet. -->
+  <script type="module" src="three-global.js"></script>
+  <script defer src="lib/globe.gl.min.js"></script>
+  <script type="module" src="globe.js"></script>
+</body>
+</html>
