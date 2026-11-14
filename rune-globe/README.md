@@ -12,12 +12,15 @@ The webcam page (`camera.html`) sees which rune is in which circle, and the glob
 | File | What it is |
 | --- | --- |
 | `globe.html` | The Midgard globe UI, plus a small "camera link" block (search for `[rune-globe]`). |
-| `camera.html` | A copy of `rune-vision/index.html` by Marks. Three small additions, all marked `[rune-globe]`. |
-| `start.command` | Mac: double-click. Starts a local server and opens both pages in Chrome. |
-| `start.bat` | Windows: double-click. Same thing (needs Python). |
+| `camera.html` | A copy of `rune-vision/index.html` by Marks (his version from PR #4, "globe add"). Small additions, all marked `[rune-globe]`. |
+| `start.command` | Starts a local server and opens both pages. Mac: double-click. Windows: `bash start.command` in Git Bash. Linux: `bash start.command`. |
+| `start.bat` | Windows: double-click. Same thing. |
+
+Both start files need Python 3 (they find `python3`, `python` or `py` by themselves).
 
 `rune-vision/` itself is not changed. If Marks updates it, copy his new `index.html` here as `camera.html`
-and add the three `[rune-globe]` blocks again.
+and add the `[rune-globe]` blocks again (search for `[rune-globe]` in the current `camera.html` to see them).
+Saved camera settings (`rune-settings.json`) go in this folder, next to `camera.html`.
 
 ## Run it
 
@@ -27,8 +30,7 @@ and add the three `[rune-globe]` blocks again.
 3. Set up the camera page once, as in `rune-vision/README.md` (find circles, teach runes, pick the right answers).
 4. Drag the globe tab to the big screen. Bottom left of the globe should say **camera: linked**.
 
-Without a camera you can test with the camera page's backup keys: **A** puts all runes in place, **0** clears them
-(press **Esc** first if the channel screen is open, otherwise 0 picks channel 10).
+Without a camera you can test with the camera page's backup keys: **A** puts all runes in place, **0** clears them.
 
 ## How the link works
 
