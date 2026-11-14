@@ -1,4 +1,4 @@
-# Rune Vision
+# Bindrune: Rune Vision
 
 A webcam watches the white board. It finds the 3 red circles and checks which coloured rune is in each one.
 When all 3 runes are in the right circles, it shows the **Jörmungandr** win screen.
