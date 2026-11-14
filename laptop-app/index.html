@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bindrune · Techathon 2026</title>
+<meta name="description" content="Interactive rune installation: three NFC stones, a world map, and the waking of Jörmungandr." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="frame" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="masthead">
+      <div class="brand">
+        <span class="sigil" aria-hidden="true">
+          <svg viewBox="0 0 40 64"><path d="M20 4L34 22L20 40L6 22ZM12 30L6 60M28 30L34 60" /></svg>
+        </span>
+        <div class="brand-copy">
+          <p class="eyebrow">Techathon 2026 · Interactive installation</p>
+          <h1>Bind<em>rune</em></h1>
+        </div>
+      </div>
+      <div class="masthead-tools">
+        <div class="pill" id="reader-pill" data-mode="sim">
+          <span class="pill-dot"></span>
+          <span id="reader-label">Reader · simulation</span>
+        </div>
+        <button class="btn" id="btn-serial" type="button">Connect reader</button>
+        <button class="btn" id="btn-reset" type="button">Reset <kbd>R</kbd></button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="map-panel" aria-label="World map of the rune stones">
+        <div class="map-head">
+          <h2>Miðgarðr</h2>
+          <p>The encircled world · three stones wake the serpent</p>
+        </div>
+        <svg id="map" class="map" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet" role="img"
+             aria-label="World map showing where each of the three rune stones stands"></svg>
+        <div class="awaken" id="awaken" hidden>
+          <button class="awaken-btn" id="awaken-btn" type="button">
+            <span class="awaken-sigil" aria-hidden="true">
+              <svg viewBox="0 0 40 64"><path d="M12 8L28 24L12 40L28 56M28 8L12 24L28 40L12 56" /></svg>
+            </span>
+            <span class="awaken-text">
+              <strong>Awaken the serpent</strong>
+              <em>Three stones are speaking · the sea is listening</em>
+            </span>
+          </button>
+        </div>
+
+        <div class="map-foot">
+          <span class="map-status" id="map-status">No stones placed — the map sleeps</span>
+          <span class="map-hint">Drag a stone onto its seat · the reader verifies its NFC tag</span>
+        </div>
+      </section>
+
+      <aside class="rail">
+        <section class="block">
+          <h3 class="block-title">The board <span>three seats</span></h3>
+          <div class="seats" id="seats"></div>
+        </section>
+
+        <section class="block">
+          <h3 class="block-title">The stones <span>drag to place</span></h3>
+          <div class="tray" id="tray"></div>
+        </section>
+
+        <section class="block block-log">
+          <h3 class="block-title">The chronicle <span>reader log</span></h3>
+          <ol class="log" id="log" aria-live="polite"></ol>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="reveal" id="reveal" hidden></div>
+
+  <script src="js/world-map.js"></script>
+  <script src="js/runes.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/puzzle.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/reveal.js"></script>
+  <script src="js/bridge.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- The Bindrune intro (shared with the globe, in ../rune-vision/globe/intro.js) plays on top of the app
+       when it opens. It needs the page to be served from the repository root (see README). Opened any
+       other way (file://, or a server that only serves laptop-app/) the app just starts without it. -->
+  <script type="module">
+    import('../rune-vision/globe/intro.js').then(function (intro) { intro.playIntro(); }).catch(function () {});
+  </script>
+</body>
+</html>
