@@ -1,4 +1,4 @@
-# Rune Globe
+# Bindrune: Rune Globe
 
 A 3D globe that shows the rune board. It does no camera work itself: it only listens to the events
 Rune Vision (`../index.html`) already sends, so there is one place that decides where the runes are.
@@ -30,6 +30,17 @@ Taking a rune off during its question goes back to the riddle. Taking **all** ru
 Testing without the camera: keys 1/2/3 and A place runes, but they have no knob, so SPACE says the dot can't be seen.
 Use the real board to test the answers.
 
+## Intro
+
+When the globe page opens, a short film plays on top of it (about 12 seconds): Jörmungandr circles a small globe,
+bites its own tail, the 3 places light up and the title **BINDRUNE** appears. Then it fades away and the game is there.
+Click, Space or Esc (in the globe window) skips to the bite.
+
+- On its own page: `http://localhost:8000/globe/intro.html`. Add `?loop=1` to play forever (good for a waiting screen),
+  `?speed=1.5` to go faster, `?title=...` for another word.
+- To turn it off, delete the `playIntro()` line at the bottom of `index.html`.
+- The name of the game is `TITLE` at the top of `intro.js`. The places and colours come from `settings.js`.
+
 ## Change things
 
 - `story.js`: riddles, questions, answers, which letter is right, clues and facts. Change the texts freely.
@@ -38,6 +49,7 @@ Use the real board to test the answers.
 ## Files
 
 - `index.html`: the page (layout and styles) and the order the scripts load in
+- `intro.js`, `intro.html`: the intro film, and a page that shows only the intro
 - `globe.js`: the main file: sets up the globe, listens to Rune Vision, connects the pieces below
 - `story.js`: the texts of the journey
 - `quest.js`: the rules of the journey (riddle → question → lock in → next)

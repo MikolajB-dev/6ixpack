@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bindrune – Intro</title>
+<style>html, body { margin: 0; height: 100%; background: #0b0704; }</style>
+</head>
+<body>
+<!--
+  The intro on its own page. Open http://localhost:8000/globe/intro.html (after start.command).
+  Add to the address:  ?loop=1  play forever   ?hold=0  fade out at the end
+                       ?transparent=1  no background   ?speed=1.5  faster   ?title=YGGDRASIL  other title
+-->
+<script type="module">
+  import { playIntro, TITLE } from './intro.js';
+  const q = new URLSearchParams(location.search);
+  playIntro({
+    title: q.get('title') || TITLE,
+    loop: q.get('loop') === '1',
+    hold: q.get('hold') !== '0',          // standalone page: stay on the last frame by default
+    transparent: q.get('transparent') === '1',
+    speed: parseFloat(q.get('speed') || '1'),
+  });
+</script>
+</body>
+</html>

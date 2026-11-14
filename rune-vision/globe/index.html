@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rune Globe</title>
+<title>Bindrune</title>
 <style>
   :root { --panel: min(520px, 40vw); --gold: #e3b955; --text: #f3e4c4; --muted: #b9a37d; --line: #8a6a3a; }
   html, body { margin: 0; height: 100%; background: #140d07; overflow: hidden; font-family: Georgia, serif; color: var(--text); }
@@ -62,5 +62,8 @@
   <script type="module" src="three-global.js"></script>
   <script defer src="lib/globe.gl.min.js"></script>
   <script type="module" src="globe.js"></script>
+
+  <!-- The Bindrune intro plays on top of the globe when the page opens, then fades away (see intro.js). -->
+  <script type="module">import { playIntro } from './intro.js'; playIntro();</script>
 </body>
 </html>
