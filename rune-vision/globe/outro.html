@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bindrune – Outro</title>
+<style>html, body { margin: 0; height: 100%; background: #0b0704; }</style>
+</head>
+<body>
+<!--
+  The outro on its own page. Open http://localhost:8000/globe/outro.html (after start.command).
+  Add to the address:  ?loop=1  play forever   ?hold=1  stay on the bound world, no fade-out
+                       ?transparent=1  no background   ?speed=1.5  faster   ?title=...  ?line=...  other words
+                       ?start=11  begin 11 seconds in (to look at one moment)
+-->
+<script type="module">
+  import { playOutro, LINE } from './outro.js';
+  import { TITLE } from './intro.js';
+  const q = new URLSearchParams(location.search);
+  playOutro({
+    title: q.get('title') || TITLE,
+    line: q.get('line') || LINE,
+    loop: q.get('loop') === '1',
+    hold: q.get('hold') === '1',
+    transparent: q.get('transparent') === '1',
+    speed: parseFloat(q.get('speed') || '1'),
+    start: parseFloat(q.get('start') || '0'),
+  });
+</script>
+</body>
+</html>

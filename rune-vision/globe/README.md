@@ -22,8 +22,10 @@ The camera page is only for setting up. Visitors only see the globe: the story c
 3. **Question:** a history question with 4 answers. Turning the rune picks the answer: dot up = A, right = B, down = C, left = D.
    The answer the dot points at is highlighted live.
 4. **Lock in** with SPACE (in the Rune Vision window). Wrong: a clue appears, try again. Right: a short fact, and the stone is locked.
-5. From the 2nd stone on, Jörmungandr slithers from Jelling to the new stone and coils around it.
-6. After a few seconds the next riddle appears. After the last stone, the serpent closes the ring and the globe spins.
+5. From the 2nd stone on, Jörmungandr slithers on from the last stone it reached to the new one and coils around it.
+   There is only **one** serpent: it starts at Jelling and grows from stone to stone (Jelling → Yorba Linda → Tokyo).
+6. After a few seconds the next riddle appears. After the last stone, the serpent goes back to Jelling and bites its own
+   tail, closing the ring. Then the outro plays (see below) and the globe spins.
 
 Taking a rune off during its question goes back to the riddle. Taking **all** runes off the map starts again for the next visitor.
 
@@ -42,7 +44,7 @@ Open `globe/` on its own and press keys in the globe window. They fake the board
 ## Polish (what the screen does on its own)
 
 - **Camera:** when the right rune is placed, the globe flies a little closer to that stone. After a right answer it pulls back
-  over the serpent's route so you see it slither from Jelling. For the next riddle it returns to the usual view (so the riddle
+  over the serpent's new leg so you see it slither on from the last stone. For the next riddle it returns to the usual view (so the riddle
   is not given away). If a visitor drags the globe, it glides back after about 12 seconds.
 - **Waiting screen:** if nobody plays for a minute (board empty, first riddle), the globe slowly turns. The first rune stops it.
 - **Story card:** a trail of 3 diamonds at the top (found stones show their rune, the current one glows). New cards slide in,
@@ -53,7 +55,7 @@ Open `globe/` on its own and press keys in the globe window. They fake the board
 - **Sound:** soft tones made in the browser (no files). Browsers only play sound after a click or key press in that window.
 
 Keys on the globe page (only in its own window, not inside Rune Vision's G view): **F** full screen, **R** back to the usual
-view, **M** sound on/off. Numbers for all of this are in `settings.js` under `CAMERA`, `EFFECTS` and `SOUND`.
+view, **M** sound on/off, **O** play the outro. Numbers for all of this are in `settings.js` under `CAMERA`, `EFFECTS` and `SOUND`.
 
 ## Intro
 
@@ -66,6 +68,22 @@ Click, Space or Esc (in the globe window) skips to the bite.
 - To turn it off, delete the `playIntro()` line at the bottom of `index.html`.
 - The name of the game is `TITLE` at the top of `intro.js`. The places and colours come from `settings.js`.
 
+## Outro
+
+The closing twin of the intro (about 15 seconds). It starts by itself 1.6 seconds after the serpent bites its tail
+at the end of the journey. The game globe dissolves into the intro's small globe with the serpent holding its tail,
+the 3 runes lift off their places and fly together, a gold ring closes in and they fuse into one **bind rune**
+(ᚼ ᚢ ᛏ in one sign): a flash, a shockwave, a light runs around the serpent and its scales glow gold.
+**BINDRUNE** comes back with "All stones are bound". Then the world goes dark, only the bind rune and the serpent's
+eyes keep glowing, and it fades back to the spinning globe. Click, Space or Esc skips to the ending.
+Taking all runes off the map stops it straight away.
+
+- On its own page: `http://localhost:8000/globe/outro.html`. `?loop=1` plays forever, `?hold=1` stays on the bright
+  bound world, `?speed=1.5` goes faster, `?start=6` begins 6 seconds in, `?line=...` changes the small line.
+- **O** on the globe page plays it at any time.
+- The wait before it starts is `OUTRO.delayMs` in `settings.js`. To turn it off, set it very high.
+- It reuses the intro's serpent head, scales, places, arcs and rune shapes (exported from `intro.js`), so both films match.
+
 ## Change things
 
 - `story.js`: riddles, questions, answers, which letter is right, clues and facts. Change the texts freely.
@@ -76,6 +94,7 @@ Click, Space or Esc (in the globe window) skips to the bite.
 
 - `index.html`: the page (layout and styles) and the order the scripts load in
 - `intro.js`, `intro.html`: the intro film, and a page that shows only the intro
+- `outro.js`, `outro.html`: the outro film, and a page that shows only the outro
 - `globe.js`: the main file: sets up the globe, listens to Rune Vision, connects the pieces below
 - `story.js`: the texts of the journey
 - `quest.js`: the rules of the journey (riddle → question → lock in → next)
@@ -83,7 +102,7 @@ Click, Space or Esc (in the globe window) skips to the bite.
 - `settings.js`: all the numbers and colours
 - `parchment.js`: draws the old map that wraps around the globe (no images needed)
 - `runestone.js`: one runestone (rise, glowing rune, rings)
-- `serpent.js`: one serpent (route, scaled body, head, swaying)
+- `serpent.js`: the one serpent (route from stone to stone, scaled body, head, swaying)
 - `geo.js`: maths for points on a sphere
 - `camera.js`: where the camera looks at each moment of the journey, glide-back and the waiting-screen spin
 - `effects.js`: gold dust and sparkle bursts

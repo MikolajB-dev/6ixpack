@@ -7,8 +7,9 @@
     riddle            -> hints where the next rune goes
     right rune placed -> its runestone rises and a history question appears (4 answers = 4 knob positions)
     SPACE (lock in)   -> wrong answer: a clue. Right answer: the stone is locked, and from the 2nd stone on
-                         Jörmungandr slithers from the home stone (Jelling) and coils around it
-    then              -> the next riddle. After the last stone the serpent closes the ring and the globe spins.
+                         Jörmungandr (one serpent) slithers on from the last stone and coils around it
+    then              -> the next riddle. After the last stone the serpent goes home, bites its tail,
+                         and the outro film plays (outro.js).
 
   The other files:
     story.js      riddles, questions, answers, clues (edit the texts there)
@@ -22,8 +23,10 @@
     camera.js     flies the camera to the stone being played, and back
     effects.js    gold dust and sparkle bursts
     sound.js      soft sounds (M mutes)
+    outro.js      the closing film, after the serpent has bitten its tail
 */
-import { PLACES, VIEW, COLORS, SERPENT } from './settings.js';
+import { PLACES, VIEW, COLORS, SERPENT, HUB, OUTRO } from './settings.js';
+import { playOutro } from './outro.js';
 import { drawParchmentMap } from './parchment.js';
 import { Runestone } from './runestone.js';
 import { Serpent } from './serpent.js';
@@ -69,23 +72,17 @@ function placeLabel(place) {
 const stones = {};                       // one runestone per place, always there
 for (const [id, place] of Object.entries(PLACES)) stones[id] = new Runestone(globe, place);
 
-const serpents = new Map();              // serpents on the globe now, by name ("jelling-tokyo")
+const serpent = new Serpent(globe);      // Jörmungandr: there is only ONE serpent, it grows from stone to stone
 const effects = new Effects(globe);      // gold dust and sparkles
 const camera = new CameraDirector(globe);
 
-// Make the stones and serpents match what quest.js says. Safe to call any time.
+// Make the stones and the serpent match what quest.js says. Safe to call any time.
 function drawScene() {
   const now = performance.now();
   for (const id of Object.keys(PLACES)) stones[id].setState(quest.stoneState(id), now);
 
-  const wanted = quest.serpents();
-  const names = wanted.map(([a, b]) => `${a}-${b}`);
-  for (const [name, serpent] of serpents) {
-    if (!names.includes(name)) { serpent.remove(); serpents.delete(name); }
-  }
-  wanted.forEach(([a, b, coil], i) => {
-    if (!serpents.has(names[i])) serpents.set(names[i], new Serpent(globe, PLACES[a], PLACES[b], now, coil));
-  });
+  const path = quest.serpent();
+  serpent.follow(path.stops.map(id => PLACES[id]), path.ring, now);
 
   // Name tags: gold with their rune once found, reddish while the wrong rune is on them.
   for (const id of Object.keys(PLACES)) {
@@ -99,8 +96,9 @@ function drawScene() {
 function animate() {
   const now = performance.now();
   for (const stone of Object.values(stones)) stone.update(now, globe.camera());
-  for (const serpent of serpents.values()) serpent.update(now);
+  serpent.update(now);
   effects.update(now);
+  outroCheck(now);
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
@@ -176,7 +174,7 @@ setInterval(() => { if (camera.tick(quest) !== globe.controls().autoRotate) draw
 
 /* ===================== 5. Keys on the globe page ===================== */
 // (The game keys, 1/2/3/A/0 and SPACE, are on the Rune Vision page. These only help with the screen.)
-//   F  full screen      R  back to the usual view      M  sound on/off
+//   F  full screen      R  back to the usual view      M  sound on/off      O  play the outro
 //   and the demo keys in demo.js (N next step, H help) to play without the board
 
 const toast = document.getElementById('toast');
@@ -198,8 +196,41 @@ window.addEventListener('keydown', e => {
     say('Back to the usual view');
   } else if (k === 'm') {
     say(toggleMute() ? 'Sound off' : 'Sound on');
+  } else if (k === 'o' && !outro) {
+    startOutro(false);                                         // play the outro now (for trying it out)
   }
 });
+
+/* ===================== 6. The outro ===================== */
+// When the journey is complete, the serpent goes home and bites its own tail. A moment later the
+// outro film (outro.js) plays on top of the globe, the closing twin of the intro, then fades back to the globe.
+// Taking all runes off (a new visitor) stops it straight away.
+
+let outro = null;          // the outro that is playing now, or null
+let outroPlayed = false;   // it plays once per finished journey
+let bitten = false;        // the serpent's jaws have closed on its tail
+
+function outroCheck(now) {
+  if (quest.phase !== 'finished') {
+    if (outro && outro.auto) { outro.close(); outro = null; }   // a new visitor: stop it (but not one started with O)
+    outroPlayed = bitten = false;
+    return;
+  }
+  if (!bitten && serpent.arrived(now)) {                        // the bite: a gold burst at home
+    bitten = true;
+    effects.burst(PLACES[HUB], COLORS.runeGlow, 160);
+    play('right');
+  }
+  if (!outro && !outroPlayed && serpent.arrived(now - OUTRO.delayMs)) { outroPlayed = true; startOutro(true); }
+}
+
+// auto: started by the journey itself (false: the O key)
+function startOutro(auto) {
+  const playing = playOutro();
+  playing.auto = auto;
+  playing.then(() => { if (outro === playing) outro = null; });
+  outro = playing;
+}
 
 // Demo keys (N, P, W, 1-4, Enter, 0, H): play without the camera or board. See demo.js.
 startDemo(quest, msg => { onEvent(msg); link.textContent = 'demo keys (H for help)'; }, text => say(text, 4000));

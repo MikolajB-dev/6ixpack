@@ -84,15 +84,11 @@ export class Quest {
     return !s.rune ? 'empty' : s.correct ? 'right' : 'wrong';
   }
 
-  // Which serpents to show: [from, to, coil]. Every locked stone after home is joined to home.
-  serpents() {
-    if (!this.locked.includes(HUB)) return [];
-    const list = this.locked.filter(id => id !== HUB).map(id => [HUB, id, true]);
-    // Whole journey done: the last two stones are joined too, closing Jörmungandr's ring.
-    if (this.phase === 'finished' && this.locked.length >= 3) {
-      const n = this.locked.length;
-      list.push([this.locked[n - 2], this.locked[n - 1], false]);
-    }
-    return list;
+  // Where the ONE serpent (Jörmungandr) goes: from home through every locked stone, in the order they were solved.
+  // ring: the whole journey is done, so it goes back home and bites its own tail.
+  serpent() {
+    if (!this.locked.includes(HUB)) return { stops: [], ring: false };
+    const stops = [HUB, ...this.locked.filter(id => id !== HUB)];
+    return { stops, ring: this.phase === 'finished' && stops.length >= 3 };
   }
 }

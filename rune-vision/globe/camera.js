@@ -3,7 +3,7 @@
 
     riddle    the usual view with all 3 places (VIEW in settings.js), so the riddle doesn't give the answer away
     question  flies a little closer to the stone whose rune was just placed
-    solved    pulls back over the serpent's route, so you can watch it slither from Jelling
+    solved    pulls back over the serpent's route, so you can watch it slither on from the last stone
     finished  back to the usual view, and the globe spins
 
   Also:
@@ -34,7 +34,8 @@ export class CameraDirector {
     if (quest.phase === 'solved') {
       const to = PLACES[story.slot];
       if (story.slot === HUB) return closeTo(to, CAMERA.focusAltitude + 0.3);
-      const mid = pointBetween(PLACES[HUB], to, 0.5);      // halfway along the serpent's route
+      const prev = PLACES[quest.locked[quest.locked.length - 2] || HUB];   // the stone the serpent comes from
+      const mid = pointBetween(prev, to, 0.5);             // halfway along the serpent's new leg
       return { lat: mid.lat, lng: mid.lng, altitude: VIEW.altitude };
     }
     return VIEW;

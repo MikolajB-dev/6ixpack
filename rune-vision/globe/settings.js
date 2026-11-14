@@ -66,3 +66,8 @@ export const SOUND = {
   enabled: true,
   volume: 0.25,
 };
+
+// The outro film that plays when the journey is complete (outro.js).
+export const OUTRO = {
+  delayMs: 1600,        // wait this long after the serpent bites its tail before the outro starts
+};

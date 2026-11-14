@@ -421,7 +421,7 @@ function makePath() {
 }
 
 // The head. It is built looking along +z, with +y up. Sizes are in body thicknesses (r).
-function makeHead(skin, bone) {
+export function makeHead(skin, bone) {
   const group = new THREE.Group();
   const r = BODY * 1.15;
   const ball = (material, sx, sy, sz, x, y, z, parent = group) => {
@@ -526,13 +526,13 @@ function taperedTube(curve, thick, steps = 14, sides = 7) {
 /* ====================== places, runes and arcs ====================== */
 
 // A point on the unit globe. Matches how three.js wraps a flat map around a sphere.
-function onGlobe(lat, lng, radius = 1) {
+export function onGlobe(lat, lng, radius = 1) {
   const la = lat * Math.PI / 180, lo = lng * Math.PI / 180;
   return new THREE.Vector3(Math.cos(la) * Math.cos(lo), Math.sin(la), -Math.cos(la) * Math.sin(lo)).multiplyScalar(radius);
 }
 
 // One place: a gold spark on the ground and its rune floating above it.
-function makeMarker(place) {
+export function makeMarker(place) {
   const group = new THREE.Group();
   const sprite = (map, color) => new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   const spark = sprite(glowTexture(), COLORS.runeGlow);
@@ -559,7 +559,7 @@ function makeMarker(place) {
 }
 
 // Gold arcs between every pair of places, arching over the globe.
-function makeArcs(places) {
+export function makeArcs(places) {
   const arcs = [];
   for (let i = 0; i < places.length; i++) {
     for (let j = i + 1; j < places.length; j++) {
@@ -586,13 +586,13 @@ function makeArcs(places) {
 
 // Runes are straight lines, so we draw them ourselves (no special font needed). Same shapes as runestone.js.
 // Each line is [x1, y1, x2, y2] in a 0..1 box, y going down.
-const RUNE_LINES = {
+export const RUNE_LINES = {
   'ᚼ': [[0.5, 0, 0.5, 1], [0.2, 0.25, 0.8, 0.75], [0.8, 0.25, 0.2, 0.75]],   // hagall
   'ᚢ': [[0.3, 1, 0.3, 0], [0.3, 0, 0.75, 0.35], [0.75, 0.35, 0.75, 1]],      // ur
   'ᛏ': [[0.5, 0, 0.5, 1], [0.5, 0, 0.2, 0.35], [0.5, 0, 0.8, 0.35]],         // tyr
 };
 
-function runeTexture(glyph) {
+export function runeTexture(glyph) {
   const c = document.createElement('canvas');
   c.width = c.height = 256;
   const ctx = c.getContext('2d');
@@ -612,7 +612,7 @@ function runeTexture(glyph) {
 }
 
 // A soft round glow, white in the middle. Coloured by the material that uses it.
-function glowTexture() {
+export function glowTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const ctx = c.getContext('2d');
@@ -625,7 +625,7 @@ function glowTexture() {
 }
 
 // Overlapping scales: dark green with bronze edges, repeated along the body.
-function scaleTexture() {
+export function scaleTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 128;
   const ctx = c.getContext('2d');
@@ -649,7 +649,7 @@ function scaleTexture() {
 }
 
 // A few hundred faint gold specks floating around the scene.
-function makeDust() {
+export function makeDust() {
   const positions = [];
   let seed = 11;
   const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
