@@ -30,6 +30,22 @@ Taking a rune off during its question goes back to the riddle. Taking **all** ru
 Testing without the camera: keys 1/2/3 and A place runes, but they have no knob, so SPACE says the dot can't be seen.
 Use the real board to test the answers.
 
+## Polish (what the screen does on its own)
+
+- **Camera:** when the right rune is placed, the globe flies a little closer to that stone. After a right answer it pulls back
+  over the serpent's route so you see it slither from Jelling. For the next riddle it returns to the usual view (so the riddle
+  is not given away). If a visitor drags the globe, it glides back after about 12 seconds.
+- **Waiting screen:** if nobody plays for a minute (board empty, first riddle), the globe slowly turns. The first rune stops it.
+- **Story card:** a trail of 3 diamonds at the top (found stones show their rune, the current one glows). New cards slide in,
+  turning the knob moves the highlight, a wrong answer shakes, the right one turns green, and a thin gold bar fills
+  until the next riddle appears.
+- **Globe:** gold dust drifts around it, a found stone sends up gold sparkles (all stones at the end), and its name turns gold
+  with its rune. A wrong rune turns the name reddish.
+- **Sound:** soft tones made in the browser (no files). Browsers only play sound after a click or key press in that window.
+
+Keys on the globe page (only in its own window, not inside Rune Vision's G view): **F** full screen, **R** back to the usual
+view, **M** sound on/off. Numbers for all of this are in `settings.js` under `CAMERA`, `EFFECTS` and `SOUND`.
+
 ## Intro
 
 When the globe page opens, a short film plays on top of it (about 12 seconds): Jörmungandr circles a small globe,
@@ -44,7 +60,8 @@ Click, Space or Esc (in the globe window) skips to the bite.
 ## Change things
 
 - `story.js`: riddles, questions, answers, which letter is right, clues and facts. Change the texts freely.
-- `settings.js`: places, the rune on each stone, colours, stone size and rise speed, serpent thickness, speed, coil and sway.
+- `settings.js`: places, the rune on each stone, colours, stone size and rise speed, serpent thickness, speed, coil and sway,
+  camera moves, sparkles and sound volume.
 
 ## Files
 
@@ -59,6 +76,9 @@ Click, Space or Esc (in the globe window) skips to the bite.
 - `runestone.js`: one runestone (rise, glowing rune, rings)
 - `serpent.js`: one serpent (route, scaled body, head, swaying)
 - `geo.js`: maths for points on a sphere
+- `camera.js`: where the camera looks at each moment of the journey, glide-back and the waiting-screen spin
+- `effects.js`: gold dust and sparkle bursts
+- `sound.js`: the soft sounds (made in the browser)
 - `three-global.js`: loads three.js once so Globe.gl and our code share it
 - `lib/`: local copies of Globe.gl 2.46.2 and three.js 0.186.1, so it works offline
 - `img/countries.geojson`: country shapes (Natural Earth, simplified)

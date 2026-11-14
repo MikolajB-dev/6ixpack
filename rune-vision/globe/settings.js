@@ -44,3 +44,25 @@ export const SERPENT = {
   coilTurns: 2.5,     // how many times it wraps around the stone
   wiggle: 0.9,        // how far it sways side to side while moving (units)
 };
+
+// Camera moves. The globe flies to the stone being played, follows the serpent, then comes back to VIEW.
+export const CAMERA = {
+  flyMs: 1800,          // how long one camera flight takes
+  focusAltitude: 1.7,   // how close it gets when looking at one stone (VIEW is 2.4)
+  tilt: 0.35,           // 0 = look straight down at the stone, 1 = the usual view. In between shows its side.
+  returnMs: 12000,      // after a visitor drags the globe, glide back this long after they let go
+  attractMs: 60000,     // nobody playing for this long: the globe slowly turns until someone places a rune
+};
+
+// Sparkles and the gold dust around the globe.
+export const EFFECTS = {
+  dust: 700,            // number of drifting gold motes around the globe (0 = off)
+  burst: 90,            // sparkles when a stone is found
+  burstMs: 1800,        // how long a burst lasts
+};
+
+// Soft sounds made in the browser (no files). Press M on the globe page to mute.
+export const SOUND = {
+  enabled: true,
+  volume: 0.25,
+};
