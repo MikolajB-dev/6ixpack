@@ -19,7 +19,8 @@ const int BUTTON_PIN = 6;
 const unsigned long LOCKED_SHOW_MS = 1500;   // how long "Locked in!" stays on screen
 
 // "_1_" = draws the screen in small pieces, which saves the Arduino's small memory.
-U8G2_SSD1306_128X64_NONAME_1_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+// U8G2_R2 = rotated 180 degrees (the kit's screen is mounted upside down). Use U8G2_R0 to flip it back.
+U8G2_SSD1306_128X64_NONAME_1_HW_I2C oled(U8G2_R2, U8X8_PIN_NONE);
 
 char letter = '-';            // '-' no rune, '?' knob dot not visible, otherwise A-D
 bool showingLocked = false;   // true for a moment after the button press
@@ -88,19 +89,26 @@ void readLaptop() {
 }
 
 void drawScreen() {
-  const char *caption;
-  if (showingLocked)      caption = "Locked in!";
-  else if (letter == '-') caption = "Place a rune";
-  else if (letter == '?') caption = "Can't see the dot";
-  else                    caption = "Your answer";
-
-  char big[2] = { letter == '-' ? ' ' : letter, '\0' };
+  char big[2] = { letter, '\0' };
+  char lockedText[8] = "in: ?";
+  lockedText[4] = letter;
 
   oled.firstPage();
   do {
-    oled.setFont(u8g2_font_6x12_tr);
-    oled.drawStr((128 - oled.getStrWidth(caption)) / 2, 10, caption);
-    oled.setFont(u8g2_font_logisoso42_tr);
-    oled.drawStr((128 - oled.getStrWidth(big)) / 2, 62, big);
+    if (showingLocked)      drawTwoLines("Locked", lockedText);
+    else if (letter == '-') drawTwoLines("Place", "a rune");
+    else if (letter == '?') drawTwoLines("Dot not", "visible");
+    else {
+      // just the answer letter, as big as the screen allows
+      oled.setFont(u8g2_font_logisoso50_tr);
+      oled.drawStr((128 - oled.getStrWidth(big)) / 2, 61, big);
+    }
   } while (oled.nextPage());
+}
+
+// Two lines of big text, centred.
+void drawTwoLines(const char *top, const char *bottom) {
+  oled.setFont(u8g2_font_helvB18_tr);
+  oled.drawStr((128 - oled.getStrWidth(top)) / 2, 27, top);
+  oled.drawStr((128 - oled.getStrWidth(bottom)) / 2, 58, bottom);
 }
