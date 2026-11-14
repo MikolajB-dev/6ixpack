@@ -41,21 +41,99 @@
   }
   /* Small status in the corner: are we receiving events from the vision page? */
   #link { position: absolute; top: 12px; right: 16px; font-size: 13px; opacity: .6; }
+
+  /* ---------- polish: progress trail, transitions, feedback animations ---------- */
+  #panel-progress { display: flex; align-items: center; gap: 0; margin-bottom: 6px; }
+  #panel-progress .pip {
+    width: 34px; height: 34px; flex: none; display: grid; place-items: center; box-sizing: border-box;
+    border: 1px solid var(--line); transform: rotate(45deg); color: var(--gold); font-size: 0;
+    background: rgba(255, 230, 180, 0.03); transition: background .4s, border-color .4s, box-shadow .4s;
+  }
+  #panel-progress .pip.found {
+    font-size: 19px; line-height: 1; border-color: var(--gold); background: rgba(227, 185, 85, 0.18);
+    box-shadow: 0 0 14px rgba(227, 185, 85, 0.45); animation: pip-in .6s ease-out;
+  }
+  /* the rune inside a diamond is turned back upright */
+  #panel-progress .pip em { font-style: normal; transform: rotate(-45deg); }
+  #panel-progress .pip.current { border-color: var(--gold); animation: pip-pulse 2.2s ease-in-out infinite; }
+  #panel-progress .trail { flex: 1; max-width: 70px; height: 1px; margin: 0 10px; background: linear-gradient(90deg, var(--line), #3a2817); }
+  @keyframes pip-pulse { 0%, 100% { box-shadow: 0 0 0 rgba(227, 185, 85, 0); } 50% { box-shadow: 0 0 16px rgba(227, 185, 85, 0.6); } }
+  @keyframes pip-in { from { transform: rotate(45deg) scale(1.6); opacity: 0; } to { transform: rotate(45deg) scale(1); opacity: 1; } }
+
+  #panel-body { display: flex; flex-direction: column; gap: 18px; }
+  #panel-body.enter > * { animation: card-in .7s cubic-bezier(.2, .7, .2, 1) both; }
+  #panel-body.enter > :nth-child(2) { animation-delay: .08s; }
+  #panel-body.enter > :nth-child(3) { animation-delay: .16s; }
+  #panel-body.enter > :nth-child(4) { animation-delay: .24s; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(14px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+
+  #panel-answers li { animation: card-in .5s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(.2s + var(--i, 0) * .07s); }
+  #panel-answers li .arrow { color: var(--gold); font-style: normal; margin-right: 2px; }
+  #panel-answers li.selected { box-shadow: inset 4px 0 0 var(--gold), 0 0 18px rgba(227, 185, 85, 0.18); transform: translateX(4px); }
+  #panel-answers li { transition: background .2s, border-color .2s, transform .25s, box-shadow .25s; }
+  #panel-answers li.correct { background: rgba(159, 211, 106, 0.16); border-color: #9fd36a; box-shadow: inset 4px 0 0 #9fd36a, 0 0 22px rgba(159, 211, 106, 0.25); }
+  #panel-answers li.correct b { color: #9fd36a; }
+  #panel-answers li.shake { animation: shake .45s ease-in-out; border-color: #e0664a; }
+  @keyframes shake { 0%, 100% { transform: translateX(4px); } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(10px); } }
+
+  #panel-feedback.pop { animation: pop .5s ease-out; }
+  #panel-feedback.right { text-shadow: 0 0 12px rgba(159, 211, 106, 0.35); }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* thin gold bar: fills while the serpent travels, then the next riddle comes */
+  #panel-timer { height: 2px; background: rgba(227, 185, 85, 0.12); border-radius: 2px; overflow: hidden; opacity: 0; transition: opacity .4s; }
+  #panel-timer::before { content: ''; display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #8a6a3a, var(--gold)); transform-origin: left; transform: scaleX(0); }
+  #panel-timer.run { opacity: 1; }
+  #panel-timer.run::before { animation: fill var(--ms, 6500ms) linear forwards; }
+  @keyframes fill { to { transform: scaleX(1); } }
+
+  /* the place names: found places turn gold and show their rune */
+  .place-label { transition: color .6s, text-shadow .6s, font-size .6s; }
+  .place-label .rune { display: none; margin-right: 6px; color: var(--gold); }
+  .place-label.found { color: var(--gold); text-shadow: 0 0 3px #140d07, 0 0 10px rgba(227, 185, 85, 0.55), 0 0 18px #140d07; }
+  .place-label.found .rune { display: inline; }
+  .place-label.wrong { color: #f08a70; }
+
+  /* soft dark edges around the globe, like an old lantern-lit map */
+  #vignette { position: absolute; top: 0; bottom: 0; right: 0; left: var(--panel); pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(10, 6, 3, 0.55) 100%); }
+
+  /* connection status: a small dot, quieter once connected */
+  #link { display: flex; align-items: center; gap: 8px; transition: opacity .8s; z-index: 2; }
+  #link::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); animation: pip-pulse 1.6s infinite; }
+  #link.on { opacity: .35; }
+  #link.on::before { background: #9fd36a; animation: none; box-shadow: 0 0 6px #9fd36a; }
+
+  /* a short message in the corner after a key press (mute, view reset) */
+  #toast { position: absolute; bottom: 20px; right: 24px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px;
+    background: rgba(26, 17, 10, 0.85); font-size: 14px; color: var(--muted); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 2; }
+  #toast.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
   <div id="globe"></div>
 
   <!-- The story card. panel.js fills it in. -->
+  <div id="vignette"></div>
+
   <div id="panel">
-    <p id="panel-step"></p>
-    <p id="panel-text"></p>
-    <ol id="panel-answers"></ol>
-    <p id="panel-hint"></p>
+    <div id="panel-progress"></div>
+    <div id="panel-body">
+      <p id="panel-step"></p>
+      <p id="panel-text"></p>
+      <ol id="panel-answers"></ol>
+      <p id="panel-hint"></p>
+    </div>
     <p id="panel-feedback"></p>
+    <div id="panel-timer"></div>
   </div>
 
   <div id="link">waiting for Rune Vision…</div>
+  <div id="toast"></div>
 
   <!-- Load order matters: three.js first, then Globe.gl (uses that same three.js), then our code.
        All files are local copies, so it works without internet. -->
