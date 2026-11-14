@@ -28,6 +28,14 @@ If the camera does not start, double-click `start.command` instead. It runs a ti
 - Light it evenly. A dark shadow over a circle (like the one in the middle of the test photo) makes colours harder to read; a desk lamp from above helps.
 - Hand-drawn, wobbly circles are fine. Just make sure each red line is closed (no big gaps) and the circles don't touch each other.
 
+## Windows
+
+Everything works the same on Windows: it's just a web page. Use **Chrome or Edge**.
+Double-click **start-windows.bat**: it starts a small local server and opens the page at `http://localhost:8000`
+(uses Python if installed, otherwise Windows' built-in PowerShell). Leave the black window open while you use it.
+Camera: any USB webcam or the laptop camera works. (iPhone Continuity Camera is Mac-only; on Windows use a webcam
+or a phone-webcam app that installs a virtual camera, e.g. Camo or DroidCam.)
+
 ## Set it up (one time, about 1 minute)
 
 1. Point the camera at the board so all 3 red circles are visible. Even light, no strong shadows.
@@ -71,13 +79,42 @@ Settings are saved in the browser, so you only do this once per laptop.
 | Esc | close the channel screen |
 | C | reopen the channel screen |
 
+## Knob rotation (experimental)
+
+Yes, rotation can be detected, but a plain one-colour rune is round-symmetric, so the camera can't tell how it's turned. Each rune needs one **orientation marker**:
+
+- One **black dot** (marker pen or round sticker) on the top face, about halfway between the centre and the edge.
+- About **1/5 of the rune's width** across (e.g. 1 cm dot on a 5 cm rune). Matte, not shiny.
+- The rest of the top face stays fully in the tracking colour (blue / green / yellow).
+- Camera **straight above** the board. From an angle, circles become ovals and the angles get skewed.
+- Hands hide the dot while turning. The page keeps the last good angle and updates as soon as the dot is visible again.
+
+How it works: it finds the centre of the coloured blob, finds the dark dot inside it, and the direction from centre to dot is the angle
+(0° = up in the camera picture, clockwise). The circle is split into 10 positions of 36° (one per pathway), with a dead zone between positions so it doesn't flicker.
+Press **Zero knobs** to make the current position of every knob count as 0.
+
+Tested on generated images of your board: 24 angles, worst error 1.6°. Real camera noise will be larger, but 36° per position leaves a lot of room.
+
+## Events (what other parts of the project can use)
+
+| Event | When | Data |
+| --- | --- | --- |
+| `placed` | a rune appears in a circle | rune, to, correct |
+| `removed` | a rune leaves a circle | rune, from |
+| `moved` | a rune left one circle and appeared in another within 5 s | rune, from, to, correct |
+| `rotate` | a knob turns to a new position | rune, slot, angle, step (0–9) |
+| `slot` / `state` | any change | full board state: for each circle the rune, correct, coverage %, angle, step |
+| `stones-ready` / `stones-removed` | the "needed" stones are all right / no longer right | full state |
+
+The demo channel screen can be switched off in step 3 ("Show the demo channel screen") if another part of the team builds the real visitor screen.
+
 ## Hooking up the world map later
 
 Every change is broadcast. Another page on the same server can listen like this:
 
 ```js
 new BroadcastChannel('rune-board').onmessage = e => console.log(e.data);
-// e.data.type is 'slot', 'state', 'stones-ready', 'stones-removed', 'channels-open', 'channel', 'complete'
+// e.data.type is one of the events in the table above
 // e.data.slots = [{ slot:'jelling', rune:'Blue rune', correct:true }, ...]
 ```
 
