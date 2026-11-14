@@ -12,6 +12,7 @@ The webcam page (`camera.html`) sees which rune is in which circle, and the glob
 | File | What it is |
 | --- | --- |
 | `globe.html` | The Midgard globe UI, plus a small "camera link" block (search for `[rune-globe]`). |
+| `globe-impaired-vision.html` | Globe version for blind and low-vision visitors: spoken guidance and sound cues (on by default, `?audio=0` turns them off), high-contrast text and tray. Does not have the camera link yet; it takes board input over WebSocket (`?core=1`). |
 | `camera.html` | A copy of `rune-vision/index.html` by Marks (his version from PR #4, "globe add"). Small additions, all marked `[rune-globe]`. |
 | `start.command` | Starts a local server and opens both pages. Mac: double-click. Windows: `bash start.command` in Git Bash. Linux: `bash start.command`. |
 | `start.bat` | Windows: double-click. Same thing. |
