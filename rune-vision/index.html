@@ -63,7 +63,7 @@
     </div>
     <p class="keys">
       Backup keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> cycle the rune in Jelling / Yorba Linda / Tokyo (simulation),
-      <kbd>A</kbd> all correct, <kbd>0</kbd> clear all, <kbd>K</kbd> back to camera, <kbd>D</kbd> debug mask, <kbd>Esc</kbd> close the channel screen, <kbd>C</kbd> reopen it.
+      <kbd>A</kbd> all correct, <kbd>0</kbd> clear all, <kbd>K</kbd> back to camera, <kbd>D</kbd> debug mask, <kbd>Space</kbd> lock in the knob answer, <kbd>Esc</kbd> close the channel screen, <kbd>C</kbd> reopen it.
     </p>
   </div>
 
@@ -137,8 +137,8 @@ const DEFAULTS = {
   debounceMs: 800,   // a change must hold this long before it counts (stops hands triggering things)
   required: [true,false,true], // which slots must be right to open the channel screen (Jelling + Tokyo)
   channel: 6,        // the correct Bluetooth channel (1-10)
-  questOn: true,     // open the demo channel/snake screen when the needed stones are placed
-  rotSteps: 10,      // knob positions per full turn (10 pathways = 36° each)
+  questOn: false,    // demo channel/snake screen (off: the globe is the visitor screen now)
+  rotSteps: 4,       // knob positions = answers: 0 = dot up (A), 1 = right (B), 2 = down (C), 3 = left (D)
   rotZero: [0,0,0],  // angle that counts as "0" for the knob in each slot (set with "Zero knobs")
 };
 const STORE_KEY = 'runeVision.v2'; // v2: green zones on the map, red/blue/yellow runes
@@ -153,7 +153,8 @@ const state = {
   click: null,                        // {kind:'teach',rune} | {kind:'manual',step,pts}
   debug: false,
   rot: [null,null,null],              // {deg, raw, step, x, y} per slot when a marker is visible
-  lastSeen: {},                       // rune index -> {slot, t} when it was last removed (for "moved")
+  lastSeen: {},
+  lastPlaced: -1,                     // slot index where a rune was most recently placed (the 'active' rune)                       // rune index -> {slot, t} when it was last removed (for "moved")
 };
 
 function load(){
@@ -182,6 +183,7 @@ function snapshot(){
     coverage: Math.round(state.fill[i]),
     angle: state.rot[i] ? Math.round(state.rot[i].deg) : null,   // knob angle, 0-359, clockwise
     step: state.rot[i] ? state.rot[i].step : null,               // knob position 0..rotSteps-1
+    choice: state.rot[i] ? 'ABCDEFGHIJ'[state.rot[i].step] : null, // answer letter for that position
   })), stonesReady: state.complete, stage: Q.stage, complete: Q.stage==='done' };
 }
 
@@ -303,6 +305,7 @@ function applyRaw(raw, now, instant){
         const ls=state.lastSeen[nu];
         if(ls && ls.slot!==i && now-ls.t<5000) emit('moved', { rune:nm(nu), from:SLOTS[ls.slot].id, to:SLOTS[i].id, correct:nu===cfg.answer[i] });
         else emit('placed', { rune:nm(nu), to:SLOTS[i].id, correct:nu===cfg.answer[i] });
+        state.lastPlaced=i;
       }
       emit('slot', snapshot().slots[i]);
     }
@@ -468,7 +471,7 @@ function draw(){
       vctx.globalAlpha = ro.lost>5 ? 0.45 : 1;
       vctx.strokeStyle='#59b7ff'; vctx.lineWidth=3; vctx.beginPath(); vctx.moveTo(kx,ky); vctx.lineTo(kx+Math.sin(a)*L, ky-Math.cos(a)*L); vctx.stroke();
       vctx.fillStyle='#59b7ff'; vctx.beginPath(); vctx.arc(ro.px*W, ro.py*Hh, 5, 0, Math.PI*2); vctx.fill();
-      const lt=`${Math.round(ro.deg)}° · pos ${ro.step}`; vctx.font='bold 14px Georgia'; const lw=vctx.measureText(lt).width+12;
+      const lt=`${Math.round(ro.deg)}° · ${cfg.rotSteps<=10?'ABCDEFGHIJ'[ro.step]:'pos '+ro.step}`; vctx.font='bold 14px Georgia'; const lw=vctx.measureText(lt).width+12;
       vctx.fillStyle='rgba(20,40,70,.85)'; vctx.fillRect(cx-lw/2, cy-9, lw, 20); vctx.fillStyle='#d8f0ff'; vctx.fillText(lt, cx, cy+6); vctx.globalAlpha=1;
     }
     if(!state.sim){ const t=Math.round(state.fill[i])+'%'; vctx.font='13px Georgia'; vctx.fillStyle='rgba(30,20,12,.8)'; const bt=edgeAt(c,Math.PI/2)*W; vctx.fillRect(cx-22,cy+bt+5,44,18); vctx.fillStyle="#fff"; vctx.fillText(t, cx, cy+bt+19); }
@@ -550,6 +553,17 @@ function updateRotation(){
     state.rot[i]={ deg:sm, raw:r.raw, step, x:r.x, y:r.y, px:r.px, py:r.py, lost:0 };
     if(!prev || prev.step!==step) emit('rotate', { rune:cfg.runes[ri].name, slot:SLOTS[i].id, angle:Math.round(sm), step });
   });
+}
+// SPACE = the visitor locks in the answer shown by the knob of the most recently placed rune.
+// The globe decides if it's right (it knows the questions); we only report what the board shows.
+function lockIn(){
+  const snap=snapshot();
+  let i=state.lastPlaced;
+  if(i<0 || state.committed[i]<0) i=state.committed.findIndex(v=>v>=0);   // fall back to any rune on the board
+  const sl = i>=0 ? snap.slots[i] : null;
+  emit('lock', { slot: sl?sl.slot:null, rune: sl?sl.rune:null, correctPlace: sl?sl.correct:false,
+                 step: sl?sl.step:null, choice: sl?sl.choice:null, angle: sl?sl.angle:null, slots:snap.slots });
+  hint(sl ? (sl.choice ? `Locked in: ${sl.rune} in ${SLOTS[i].name}, answer ${sl.choice}.` : `Locked in, but the knob dot on the ${sl.rune} isn't visible.`) : 'Locked in, but there is no rune on the board.');
 }
 function zeroKnobs(){
   state.rot.forEach((r,i)=>{ if(r) cfg.rotZero[i]=r.raw; });
@@ -635,6 +649,7 @@ function renderAll(){
 window.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT' || e.target.tagName==='SELECT') return;
   const k=e.key.toLowerCase();
+  if(e.code==='Space'){ e.preventDefault(); document.activeElement?.blur?.(); lockIn(); return; }
   if(Q.open){
     if(k==='escape'){ questClose(false); Q.dismissed=true; }
     else if(/^[0-9]$/.test(k)) questPick(k==='0'?10:+k);
