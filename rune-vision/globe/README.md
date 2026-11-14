@@ -102,7 +102,7 @@ Taking all runes off the map stops it straight away.
 - `settings.js`: all the numbers and colours
 - `parchment.js`: draws the old map that wraps around the globe (no images needed)
 - `runestone.js`: one runestone (rise, glowing rune, rings)
-- `serpent.js`: the one serpent (route from stone to stone, scaled body, head, swaying)
+- `serpent.js`: the one serpent (route from stone to stone, body, swaying). Its head, spikes and scales are the intro's
 - `geo.js`: maths for points on a sphere
 - `camera.js`: where the camera looks at each moment of the journey, glide-back and the waiting-screen spin
 - `effects.js`: gold dust and sparkle bursts

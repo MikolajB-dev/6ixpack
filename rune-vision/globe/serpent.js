@@ -11,17 +11,24 @@
        The route only ever grows, so the part the serpent already lies on never moves.
     2. Every frame we build a tube along the part of the route the head has reached so far,
        thin at the tail, thick in the body, and swaying side to side so it looks alive.
-    3. A head (with glowing eyes) sits at the front of the tube, looking where it is going.
+    3. The head sits at the front of the tube, looking where it is going.
+
+  It looks exactly like the serpent of the intro and outro (horned head with jaws, glowing eyes, bone spikes
+  along the back, the same scales): those pieces come from intro.js and are scaled up to SERPENT.radius,
+  so the body is as thick as before.
 */
 import * as THREE from './lib/three/three.module.js';
-import { COLORS, SERPENT, STONE } from './settings.js';
+import { SERPENT, STONE } from './settings.js';
 import { angleBetween, pointBetween, offset } from './geo.js';
+import { makeHead, scaleTexture, BODY as INTRO_BODY } from './intro.js';
 
 const SIDES = 12;          // how round the body is (corners around the tube)
 const TRAVEL_STEPS = 140;  // route points over the globe, per leg
 const COIL_STEPS = 32;     // route points per turn of the coil
 const TAIL_POINTS = 70;    // how many route points the tail takes to reach full thickness
 const MAX_POINTS = 1200;   // room in the buffers (3 legs use about 640)
+const SIZE = SERPENT.radius / INTRO_BODY;   // intro units -> globe units (the intro's body is 0.11 thick)
+const UP = new THREE.Vector3(0, 1, 0);
 
 export class Serpent {
   constructor(globe) {
@@ -51,13 +58,27 @@ export class Serpent {
     this.geometry.setIndex(index);
     this.geometry.setDrawRange(0, 0);
 
-    this.material = new THREE.MeshStandardMaterial({ map: scaleTexture(), roughness: 0.55, metalness: 0.25 });
+    // The same skin and bone as the intro's serpent.
+    this.material = new THREE.MeshStandardMaterial({ map: scaleTexture(), roughness: 0.5, metalness: 0.35, side: THREE.DoubleSide });
+    this.bone = new THREE.MeshStandardMaterial({ color: '#dcc592', roughness: 0.45, metalness: 0.3 });
     this.body = new THREE.Mesh(this.geometry, this.material);
     this.body.frustumCulled = false;                    // its size changes every frame
-    this.head = makeHead(this.material);
-    this.body.visible = this.head.visible = false;      // nothing to show until there are 2 stops
 
-    globe.scene().add(this.body, this.head);
+    // The intro's head (horns, jaws, glowing eyes), made bigger to fit this body.
+    this.face = makeHead(this.material, this.bone);
+    this.head = new THREE.Group();
+    this.face.group.scale.setScalar(SIZE);
+    this.head.add(this.face.group);
+
+    // Bone spikes, two per body point (one on the back, one on the side), like the intro.
+    const spike = new THREE.ConeGeometry(0.03 * SIZE, 0.24 * SIZE, 5);
+    spike.translate(0, 0.12 * SIZE, 0);                // so a spike stands on its base
+    this.spikes = new THREE.InstancedMesh(spike, this.bone, MAX_POINTS * 2);
+    this.spikes.frustumCulled = false;
+    this.spikes.count = 0;
+
+    this.body.visible = this.head.visible = this.spikes.visible = false;   // nothing to show until there are 2 stops
+    globe.scene().add(this.body, this.spikes, this.head);
   }
 
   // Where the serpent should be. stops: the places it has reached, in order (first = home).
@@ -72,7 +93,7 @@ export class Serpent {
 
     this.key = key;
     this.route = stops.length >= 2 ? buildRoute(this.globe, stops, ring) : [];
-    this.body.visible = this.head.visible = this.route.length > 0;
+    this.body.visible = this.head.visible = this.spikes.visible = this.route.length > 0;
 
     // Growing: the head carries on from where it is now. Anything else (a new visitor): start from the beginning.
     this.from = grows ? Math.min(reach, this.route.length - 1) : 0;
@@ -112,6 +133,15 @@ export class Serpent {
     this.head.position.copy(tip);
     this.head.up.copy(tip).normalize();
     this.head.lookAt(tip.clone().add(tip.clone().sub(before)));
+
+    // Jaws, as in the intro: a little open while it slithers, shut once it has arrived.
+    // Closing the ring: wide open just before the end, then they snap shut on the tail, and the eyes flare.
+    const t = Math.min(1, (now - this.start) / this.ms);
+    const ring = this.key.endsWith('|ring');
+    const open = ring ? smooth((t - 0.6) / 0.25) * (1 - smooth((t - 0.94) / 0.06)) * 0.75 : 0.18 * (1 - smooth((t - 0.9) / 0.1));
+    this.face.setJaw(0.12 + open);
+    const since = (now - this.start - this.ms) / 1000;
+    this.face.setGlow(1 + (ring && since > 0 ? Math.exp(-since * 2) * 2 : 0));
   }
 
   // Route point i, moved sideways by a travelling wave (only while crossing the globe, not in the coil).
@@ -126,7 +156,8 @@ export class Serpent {
   // Fill the tube buffers along the points: thin tail, full body, slightly narrower neck.
   buildTube(pts) {
     const n = Math.min(pts.length, MAX_POINTS);
-    let length = 0;
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), size = new THREE.Vector3(), dir = new THREE.Vector3();
+    let length = 0, spikes = 0;
     for (let i = 0; i < n; i++) {
       if (i > 0) length += pts[i].distanceTo(pts[i - 1]);
       const radius = SERPENT.radius * Math.min(1, 0.15 + 0.85 * i / TAIL_POINTS) * (i > n - 7 ? 0.85 : 1);
@@ -143,9 +174,22 @@ export class Serpent {
         const v = pts[i].clone().addScaledVector(normal, radius);
         this.positions.set([v.x, v.y, v.z], k * 3);
         this.normals.set([normal.x, normal.y, normal.z], k * 3);
-        this.uvs.set([length / 6, s / SIDES], k * 2);
+        this.uvs.set([length * 5 / SIZE, s / SIDES * 2], k * 2);    // the scale pattern at the intro's size
+      }
+
+      // Spikes leaning back towards the tail; none on the thin tail tip or the neck.
+      if (i >= TAIL_POINTS * 0.3 && i < n - 4) {
+        const big = radius / SERPENT.radius * (0.7 + 0.3 * Math.sin(i * 1.7));
+        for (const [base, k] of [[top, 1], [side, 0.75]]) {
+          dir.copy(base).addScaledVector(tangent, -0.55).normalize();
+          q.setFromUnitVectors(UP, dir);
+          const v = pts[i].clone().addScaledVector(base, radius * 0.85);
+          this.spikes.setMatrixAt(spikes++, m.compose(v, q, size.setScalar(big * k)));
+        }
       }
     }
+    this.spikes.count = spikes;
+    this.spikes.instanceMatrix.needsUpdate = true;
     this.geometry.setDrawRange(0, (n - 1) * SIDES * 6);
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.normal.needsUpdate = true;
@@ -153,7 +197,7 @@ export class Serpent {
   }
 
   remove() {
-    this.globe.scene().remove(this.body, this.head);
+    this.globe.scene().remove(this.body, this.spikes, this.head);
     this.geometry.dispose();
   }
 }
@@ -180,7 +224,7 @@ function buildRoute(globe, stops, ring) {
   // Closing the ring: back home, stopping just short of the tail so the jaws close on it.
   if (ring) {
     const lastPoint = route[route.length - 1];
-    const headLength = SERPENT.radius * 2.6 / 100;              // radians: roughly the length of the head
+    const headLength = SERPENT.radius * 1.8 / 100;              // radians: as in the intro, the tail tip ends inside the jaws
     const gap = Math.min(0.5, headLength / Math.max(1e-6, angleBetween(lastPoint, tail)));
     leg(route, add, lastPoint, pointBetween(tail, lastPoint, gap), false, ground, stoneTop);
   }
@@ -226,46 +270,6 @@ function bearing(a, b) {
   return Math.atan2((near.lng - a.lng) * Math.cos(a.lat * Math.PI / 180), near.lat - a.lat);
 }
 
-/* ---------- looks ---------- */
+/* ---------- helpers ---------- */
 
-function makeHead(bodyMaterial) {
-  const head = new THREE.Group();
-  const r = SERPENT.radius;
-
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), bodyMaterial);
-  skull.scale.set(r * 1.25, r * 0.85, r * 2.1);        // wide, flat and long
-  skull.position.z = r * 0.6;
-  head.add(skull);
-
-  const eyeMaterial = new THREE.MeshBasicMaterial({ color: COLORS.eyes });
-  for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(r * 0.28, 10, 8), eyeMaterial);
-    eye.position.set(side * r * 0.8, r * 0.45, r * 1.3);
-    head.add(eye);
-  }
-  return head;
-}
-
-// Overlapping scales: dark green with bronze edges, repeated along the body.
-function scaleTexture() {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = COLORS.scales; ctx.fillRect(0, 0, 128, 128);
-  const size = 32;
-  for (let row = -1; row < 5; row++) {
-    for (let col = -1; col < 5; col++) {
-      const x = col * size + (row % 2 ? size / 2 : 0), y = row * size * 0.75;
-      const g = ctx.createRadialGradient(x + size / 2, y, 2, x + size / 2, y, size * 0.7);
-      g.addColorStop(0, '#4f7a3a'); g.addColorStop(1, COLORS.scales);
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x + size / 2, y, size / 2, 0, Math.PI); ctx.fill();
-      ctx.strokeStyle = COLORS.scaleEdge; ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
+const smooth = x => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c); };   // 0..1, easing in and out

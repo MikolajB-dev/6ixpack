@@ -43,7 +43,7 @@ const T = {
 };
 
 const RING = 1.55;            // how far from the globe's centre the serpent lies (globe radius = 1)
-const BODY = 0.11;            // body thickness
+export const BODY = 0.11;            // body thickness
 const CIRCLING = 0.35;        // how fast the serpent keeps circling after the bite (radians per second)
 const BODY_POINTS = 220;      // points along the body
 const SIDES = 14;             // corners around the body
