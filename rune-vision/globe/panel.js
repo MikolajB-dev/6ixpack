@@ -42,7 +42,7 @@ export function renderPanel(quest, choice) {
         <b>${LETTERS[i]}</b> ${answer} <small>${DIRECTIONS[i]}</small>
       </li>`).join('');
     el.hint.textContent = quest.phase === 'question'
-      ? `Turn the rune in ${PLACES[story.slot].name} to choose, then press SPACE to lock in.`
+      ? `Turn the rune in ${PLACES[story.slot].name} to choose, then press the lock button.`
       : '';
   }
   showFeedback(quest.feedback);

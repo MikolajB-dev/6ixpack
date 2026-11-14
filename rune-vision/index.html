@@ -63,7 +63,7 @@
     </div>
     <p class="keys">
       Backup keys: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> cycle the rune in Jelling / Yorba Linda / Tokyo (simulation),
-      <kbd>A</kbd> all correct, <kbd>0</kbd> clear all, <kbd>K</kbd> back to camera, <kbd>D</kbd> debug mask, <kbd>Space</kbd> lock in the knob answer, <kbd>Esc</kbd> close the channel screen, <kbd>C</kbd> reopen it.
+      <kbd>A</kbd> all correct, <kbd>0</kbd> clear all, <kbd>K</kbd> back to camera, <kbd>D</kbd> debug mask, <kbd>Space</kbd> (or the Arduino button) lock in the knob answer, <kbd>Esc</kbd> close the channel screen, <kbd>C</kbd> reopen it.
     </p>
   </div>
 
@@ -554,16 +554,20 @@ function updateRotation(){
     if(!prev || prev.step!==step) emit('rotate', { rune:cfg.runes[ri].name, slot:SLOTS[i].id, angle:Math.round(sm), step });
   });
 }
-// SPACE = the visitor locks in the answer shown by the knob of the most recently placed rune.
-// The globe decides if it's right (it knows the questions); we only report what the board shows.
-function lockIn(){
+// SPACE (or the Arduino button, see arduino.js) = the visitor locks in the answer shown by the knob
+// of the most recently placed rune. The globe decides if it's right (it knows the questions); we only report what the board shows.
+// lockTarget() = the slot that would be locked in right now (also used for the Arduino's OLED letter), or null.
+function lockTarget(){
   const snap=snapshot();
   let i=state.lastPlaced;
   if(i<0 || state.committed[i]<0) i=state.committed.findIndex(v=>v>=0);   // fall back to any rune on the board
-  const sl = i>=0 ? snap.slots[i] : null;
+  return i>=0 ? { ...snap.slots[i], index:i, slots:snap.slots } : null;
+}
+function lockIn(){
+  const sl=lockTarget(), slots=sl?sl.slots:snapshot().slots;
   emit('lock', { slot: sl?sl.slot:null, rune: sl?sl.rune:null, correctPlace: sl?sl.correct:false,
-                 step: sl?sl.step:null, choice: sl?sl.choice:null, angle: sl?sl.angle:null, slots:snap.slots });
-  hint(sl ? (sl.choice ? `Locked in: ${sl.rune} in ${SLOTS[i].name}, answer ${sl.choice}.` : `Locked in, but the knob dot on the ${sl.rune} isn't visible.`) : 'Locked in, but there is no rune on the board.');
+                 step: sl?sl.step:null, choice: sl?sl.choice:null, angle: sl?sl.angle:null, slots });
+  hint(sl ? (sl.choice ? `Locked in: ${sl.rune} in ${SLOTS[sl.index].name}, answer ${sl.choice}.` : `Locked in, but the knob dot on the ${sl.rune} isn't visible.`) : 'Locked in, but there is no rune on the board.');
 }
 function zeroKnobs(){
   state.rot.forEach((r,i)=>{ if(r) cfg.rotZero[i]=r.raw; });
@@ -868,5 +872,6 @@ else hint('This browser blocks the camera here. See README (use Chrome, or run t
 requestAnimationFrame(loop);
 window.runeVision={ state, cfg:()=>cfg, snapshot, autoDetect };
 </script>
+<script src="arduino.js"></script>
 </body>
 </html>
