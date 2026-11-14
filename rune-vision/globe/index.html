@@ -28,6 +28,24 @@
   #panel-answers li small { float: right; color: var(--muted); font-size: 13px; margin-top: 4px; }
   #panel-answers li.selected { background: rgba(227, 185, 85, 0.22); border-color: var(--gold); }
   #panel-hint { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* "Your rune" badge: which physical rune the visitor should pick up (by colour). */
+  #panel-rune { display: flex; align-items: center; gap: 16px; }
+  #panel-rune[hidden] { display: none; }
+  #panel-rune-stone {
+    width: 52px; height: 62px; border-radius: 45% 45% 12% 12%;
+    border: 2px solid rgba(255,255,255,.35); box-shadow: 0 0 18px rgba(0,0,0,.5);
+  }
+  #panel-rune-label { margin: 0; font-size: clamp(18px, 1.7vw, 24px); }
+  #panel-rune-label small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* "Play again" button at the end of the journey. */
+  #panel-again {
+    align-self: flex-start; padding: 12px 28px; font: inherit; font-size: 20px; letter-spacing: 2px; cursor: pointer;
+    color: #1a110a; background: var(--gold); border: none; border-radius: 6px; box-shadow: 0 0 22px rgba(227, 185, 85, 0.35);
+  }
+  #panel-again:hover { filter: brightness(1.1); }
+  #panel-again[hidden] { display: none; }
   #panel-feedback { margin: 0; font-size: 19px; line-height: 1.4; min-height: 1.4em; }
   #panel-feedback.right { color: #9fd36a; }
   #panel-feedback.clue  { color: #f0a35b; }
@@ -124,9 +142,11 @@
     <div id="panel-progress"></div>
     <div id="panel-body">
       <p id="panel-step"></p>
+      <div id="panel-rune" hidden><div id="panel-rune-stone"></div><p id="panel-rune-label"></p></div>
       <p id="panel-text"></p>
       <ol id="panel-answers"></ol>
       <p id="panel-hint"></p>
+      <button id="panel-again" hidden>Play again</button>
     </div>
     <p id="panel-feedback"></p>
     <div id="panel-timer"></div>

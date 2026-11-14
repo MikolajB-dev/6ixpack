@@ -6,6 +6,7 @@
     'question'  right rune is placed: waiting for the visitor to lock in an answer with the knob
     'solved'    right answer: the stone is locked, the serpent travels; globe.js calls next() after a moment
   After the last step: 'finished'.
+    'clear'     "Play again" was pressed while runes are still on the map: waiting for an empty board
 
   Rules:
     - The first stone (Jelling) is "home". Every stone after it gets a serpent from home.
@@ -35,6 +36,7 @@ export class Quest {
     this.slots = slots;
     const empty = slots.every(s => !s.rune);
     if (empty && (this.step > 0 || this.phase !== 'riddle')) { this.reset(); this.slots = slots; return; }
+    if (this.phase === 'clear') return;     // still waiting for the last runes to come off
     if (this.phase === 'finished' || this.phase === 'solved') return;
 
     const s = this.slot(this.current.slot);
@@ -50,6 +52,7 @@ export class Quest {
 
   // The visitor locked in an answer (SPACE in Rune Vision). msg = { slot, choice, slots, ... }
   onLock(msg) {
+    if (this.phase === 'finished') { this.restart(); return; }   // after the end, the lock button means "play again"
     if (this.phase === 'riddle') { this.feedback = { text: 'First place a rune on the right spot.', type: 'info' }; return; }
     if (this.phase !== 'question') return;
     // Read the knob of the stone the question is about (not just the last rune that was moved).
@@ -66,6 +69,15 @@ export class Quest {
     }
   }
 
+  // "Play again": start over. If runes are still on the map, first ask to take them off,
+  // otherwise the first stone would count as solved straight away.
+  restart() {
+    const slots = this.slots;
+    this.reset();
+    this.slots = slots;
+    if (slots.some(s => s.rune)) this.phase = 'clear';
+  }
+
   // Go to the next riddle (called by globe.js after the serpent has had time to travel).
   next() {
     if (this.phase !== 'solved') return;
@@ -79,7 +91,7 @@ export class Quest {
   // How each stone should look: 'right' (risen, glowing), 'wrong' (red ring) or 'empty'.
   stoneState(id) {
     if (this.locked.includes(id)) return 'right';
-    if (this.phase === 'finished' || id !== this.current.slot) return 'empty';
+    if (this.phase === 'finished' || this.phase === 'clear' || id !== this.current.slot) return 'empty';
     const s = this.slot(id);
     return !s.rune ? 'empty' : s.correct ? 'right' : 'wrong';
   }

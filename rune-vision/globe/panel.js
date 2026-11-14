@@ -21,6 +21,10 @@ const el = {
   hint:     document.getElementById('panel-hint'),
   feedback: document.getElementById('panel-feedback'),
   timer:    document.getElementById('panel-timer'),
+  again:    document.getElementById('panel-again'),
+  rune:      document.getElementById('panel-rune'),
+  runeStone: document.getElementById('panel-rune-stone'),
+  runeLabel: document.getElementById('panel-rune-label'),
 };
 const LETTERS = ['A', 'B', 'C', 'D'];
 const DIRECTIONS = ['dot up', 'dot right', 'dot down', 'dot left'];
@@ -38,12 +42,25 @@ export function renderPanel(quest, choice) {
   shown = key;
 
   renderProgress(quest);
+  el.again.hidden = quest.phase !== 'finished';
 
   if (quest.phase === 'finished') {
     el.step.textContent = 'The journey is complete';
     el.text.textContent = 'All runestones are bound together. Jörmungandr encircles the world!';
     clearAnswers();
-    el.hint.textContent = 'Take all runes off the map to start again.';
+    el.hint.textContent = 'Press the lock button (or the button below) to play again.';
+    showRune(null);
+    showFeedback(null);
+    finish(isNew, quest);
+    return;
+  }
+
+  if (quest.phase === 'clear') {
+    el.step.textContent = 'A new journey';
+    el.text.textContent = 'Take all runes off the map to begin.';
+    clearAnswers();
+    el.hint.textContent = '';
+    showRune(null);
     showFeedback(null);
     finish(isNew, quest);
     return;
@@ -51,10 +68,15 @@ export function renderPanel(quest, choice) {
 
   el.step.textContent = `Stone ${quest.step + 1} of ${STORY.length}`;
 
+  // Which physical rune this step is about. Rune Vision tells us (its step 3 "answers"), so it is set in one place only.
+  const wanted = quest.slot(story.slot);
+  const runeName = wanted.wants ? wanted.wants.toLowerCase() : 'rune';
+  showRune(wanted.wants ? { name: wanted.wants, color: wanted.wantsColor } : null);
+
   if (quest.phase === 'riddle') {
     el.text.textContent = story.riddle;
     clearAnswers();
-    el.hint.textContent = 'Place a rune on the map where you think it belongs.';
+    el.hint.textContent = `Place the ${runeName} on the map where you think it belongs.`;
   } else {
     el.text.textContent = story.question;
     if (quest.phase === 'solved') choice = story.correct;   // after a right answer, keep showing the right one
@@ -64,7 +86,7 @@ export function renderPanel(quest, choice) {
       li.classList.toggle('correct', quest.phase === 'solved' && story.correct === LETTERS[i]);
     });
     el.hint.textContent = quest.phase === 'question'
-      ? `Turn the rune in ${PLACES[story.slot].name} to choose, then press the lock button.`
+      ? `Turn the ${runeName} in ${PLACES[story.slot].name} to choose, then press the lock button.`
       : '';
   }
 
@@ -112,6 +134,14 @@ function buildAnswers(story) {
 function clearAnswers() {
   answersFor = null;
   el.answers.innerHTML = '';
+}
+
+// The "Your rune" badge: a little stone in the rune's colour. rune = { name, color } or null.
+function showRune(rune) {
+  el.rune.hidden = !rune;
+  if (!rune) return;
+  el.runeStone.style.background = rune.color;
+  el.runeLabel.innerHTML = `<small>Your rune</small>${rune.name}`;
 }
 
 function showFeedback(feedback) {
