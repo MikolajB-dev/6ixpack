@@ -20,29 +20,40 @@ and only listens to it (the same `rune-board` events the globe uses, plus the ca
 | Key | Does |
 | --- | --- |
 | V | sound guide on / off (it remembers the choice) |
-| H | hear where you are again: the riddle, or the question with all 4 answers, and what is on the map |
+| H | hear where you are again: the riddle, or the question with all 4 answers, what is on the map, and where the rune is |
+| N | skip what is being said now (also the **Skip** button next to the guide button) |
+| + / - | speak faster / slower (0.7 to 2.0, starts at 1.3, remembered) |
+| T | guide view: a small picture of what the guide sees (for testing, bottom right) |
 | Space | lock in the answer (the game's own key, unchanged) |
+
+The keys also work while the globe has the keyboard.
 
 ## What the visitor hears
 
-One message at a time, with a short pause in between. Messages that are out of date are skipped
-(e.g. a riddle that was waiting when the question already started).
+One message at a time. Out-of-date messages are dropped (e.g. a riddle that was waiting when the question already started),
+and when the visitor does something (Space, a rune on the place) the guide stops reading and answers that instead.
 
 - **When it turns on:** what the game is about, the 3 places from left to right, the order (Jelling, then Yorba Linda,
-  then Tokyo) and the keys. Then the current riddle or question. If the globe's intro film is playing,
-  the guide waits until the film is over.
+  then Tokyo), what the beeps mean, and the keys. Then the current riddle or question. If the globe's intro film is
+  playing, the guide waits until the film is over.
 - **Riddle:** read out loud.
-- **Moving the right rune (how far):** "You have the Red rune." Beeps (at most 4 a second) that get faster and higher
-  as the rune gets closer to its place, from the left or right speaker. Now and then: "Move it down and to the right, close."
-  On the place: one ding and "That's Jelling. Let go of the rune." No beeps while the voice talks or when the rune lies still.
-- **Moving a rune whose turn it isn't:** "That's the Blue rune. It's not its turn yet." (once per stone)
-- **A rune on a place that isn't open yet:** "Tokyo is not open yet." (only if it stays there 1.5 s)
-- **Wrong rune on the open place:** a low buzz and "That rune does not belong on Jelling. Take it off and try another rune."
-- **Right rune:** a rising chord, the question, and the 4 answers with their knob positions
-  (dot up = A, right = B, down = C, left = D; each quarter turn clockwise goes to the next answer).
-- **Turning the rune:** a tick at every step; the answer in words once the rune stays on it for half a second, e.g. "B: Knut".
+- **Moving the right rune:** "I see the Red rune." Then beeps all the time while the camera sees it: faster and higher
+  as it gets closer to its place, from the left or right speaker. When the direction or distance changes:
+  "Move it up and to the right, close." On the place: a ding and "That's Jelling. Let go of the rune.", then quick
+  high beeps until the camera page counts it. A rune lying still beeps slowly.
+- **Camera can't see the rune:** a slow soft tick ("looking"), quicker when a hand moves.
+  If a hand moves for a while with no rune colour: "Hold it by its sides with the coloured top facing up."
+- **Moving a rune whose turn it isn't:** "That's the Blue rune. It's not its turn yet. Find the Red rune." (at most every 5 s)
+- **A rune on a place that isn't open yet:** "That is Tokyo. It is not open yet. Take the Yellow rune off." (if it stays 0.8 s)
+- **Wrong rune on the open place:** a low buzz and "The Blue rune does not belong on Jelling. Take it off and try another rune."
+- **Right rune:** a rising chord, "The stone at Yorba Linda rises", the question, the 4 answers with their knob positions
+  (dot up = A, right = B, down = C, left = D; each quarter turn clockwise goes to the next answer),
+  and where the rune points now if the camera already knows.
+- **Turning the rune:** a tick at every step; the answer in words once the rune stays on it a moment, e.g. "B: Knut".
 - **Space:** wrong answer = the clue; right answer = a fanfare, the fact, and where Jörmungandr goes.
-  Then the next riddle, and at the end "The journey is complete".
+  Pressing Space while the question is still being read cuts it short. Then the next riddle, and at the end
+  "The journey is complete".
+- Short sounds for every rune put on or taken off a place. Sounds get quieter while the voice talks.
 - Everything said is also shown as a big caption at the bottom of the screen.
 
 ## The order
@@ -56,28 +67,40 @@ follows it if the two ever disagree.
 
 The camera can't tell a hand over the rune from a rune taken off. So the guide waits before believing it:
 
-- Short flickers (under 2.5 s) are ignored completely. Locked stones are never talked about.
-- Rune in play hidden for 2.5 s during the question: "I can't see the rune on Yorba Linda. If your hand is on it, let go so the camera can see it."
-  (at most once every 6 s). When it is seen again: "I can see it again. The question continues."
-  Only after 9 s does it say the rune was taken off and read the riddle again.
-- Knob dot not visible for 3.5 s: "Let go of it for a moment so the camera can read it." (at most every 10 s)
-- While moving the rune: it remembers where it last saw it. Only if it stays hidden for 3 s right after moving:
-  "I can't see the Red rune. Put it down on the map so I can see where it is."
+- Rune in play hidden during the question: after 1.2 s "I can't see the rune on Yorba Linda. If your hand is on it,
+  let go so the camera can see it." This waits until the voice is free; if the rune is back before it is spoken, nothing
+  is said. If it was spoken, "I can see it again" follows when the rune is back. Only after 8 s does it say the rune
+  was taken off and read the riddle again.
+- A rune taken off another place is only mentioned for a stone that is done, or a place the guide talked about before
+  (so a short camera flicker is never reported).
+- Knob dot not visible for 3 s: "Let go of it for a moment so the camera can read it." (at most every 9 s)
+- While moving the rune, it remembers where it last saw it for 2.5 s and keeps beeping (softer).
+- **Skin looks like the Red rune** to the camera page. The guide checks each report with its own stricter colour test,
+  and treats a hand over a place as a hand (says nothing) instead of a wrong rune. The globe itself still reacts to it,
+  because that is the base game.
 
 ## How the guide finds the rune (for "how far")
 
 It never changes the camera page's settings: you still place the circles and teach the colours on the spot.
-On top of that it learns by itself:
+On top of that it learns by itself, about 16 times a second:
 
-- **Still colour is background.** Anything that looks like a rune colour but doesn't move for about 7 s (the brown map,
-  a card lying around, a shadow) is ignored. This keeps updating, so it follows changes in the light.
-- **A rune is one patch** of its colour, about rune-sized; the black dot may make a hole in it, and a patch with a dot counts more.
-- **The moving patch wins.** If several patches have the rune's colour, it follows the one that moves.
-- **Steady:** a rune must be seen in 3 of the last 5 pictures, and its position is smoothed, so jitter isn't "moving".
-- It uses a slightly stricter colour test than the camera page (clearly coloured only), so skin and old paper count less.
+- **Still colour is background.** Rune-coloured areas that never move for about 20 s (the brown map, a card lying
+  around, a shadow) are ignored. It only learns while the board is calm, and keeps updating, so it follows the light.
+- **Movement:** it compares each picture with the one before to find where a hand or rune moves.
+- **The moving patch wins.** A new patch of the rune's colour must move and be seen twice in a row before the guide
+  follows it, so the map or an arm doesn't take over.
+- **Own colour estimate:** whenever the camera page says a rune is on a place and the board is calm, the guide sharpens
+  its idea of that rune's colour (a little stricter than the taught colour, never far from it). Teaching the colour
+  again on the camera page resets it.
 
 The game itself still uses the camera page's own detection. If the camera page sees a rune where there is none
 (e.g. the brown map looking like the red rune), the globe reacts to that, and the guide can only report it.
+
+## Known limits
+
+- If the board looks empty for a moment after stone 1 (e.g. a hand covers the only rune), the base game starts the
+  journey again, and the guide says so. This can't be changed without touching `rune-vision/`.
+- Tested by replaying a recording of the board and with simulated camera events, not yet with a blind tester.
 
 ## If directions are wrong
 
@@ -86,7 +109,7 @@ match the visitor's view of the board, add `?flipx=1` (left-right) and/or `?flip
 
 ## Files
 
-- `index.html`: the page: Rune Vision in a frame, the Sound guide button and the caption
-- `audio.js`: the guide (speech, sounds, distance, lost-rune handling). It imports `quest.js`, `story.js` and `settings.js`
-  from `rune-vision/globe/`, so changes to the story or rules there are picked up automatically.
+- `index.html`: the page: Rune Vision in a frame, the Sound guide and Skip buttons, the caption and the guide view
+- `audio.js`: the guide (speech, sounds, rune tracking, distance, lost-rune handling). It imports `quest.js`, `story.js`
+  and `settings.js` from `rune-vision/globe/`, so changes to the story or rules there are picked up automatically.
 - `start.bat`, `start.command`: start a local server for the whole project and open the page

@@ -76,7 +76,8 @@ let current = null;       // the message being spoken now
 let gapUntil = 0;         // a short pause between messages
 let filmUntil = 0;        // the globe's intro film is playing: wait with talking until then
 
-function say(text, { kind = 'info', interrupt = false, tag = null } = {}) {
+// onStart (optional) runs when the message really starts being spoken, not when it is queued.
+function say(text, { kind = 'info', interrupt = false, tag = null, onStart = null } = {}) {
   if (!on) return;
   const cur = current ? current.kind : '';
   if (kind === 'guide' && (current || queue.length)) return;
@@ -91,7 +92,7 @@ function say(text, { kind = 'info', interrupt = false, tag = null } = {}) {
     if (cur === 'knob' || cur === 'guide') stopCurrent();
   }
   if (interrupt) { queue.length = 0; stopCurrent(); }
-  queue.push({ text, kind, tag });
+  queue.push({ text, kind, tag, onStart });
   pump();
 }
 function dropQueued(test) { for (let i = queue.length - 1; i >= 0; i--) if (test(queue[i])) queue.splice(i, 1); }
@@ -112,6 +113,7 @@ function pump() {
   const item = queue.shift();
   current = item;
   caption(item.text);
+  if (item.onStart) item.onStart();
   const done = () => {
     if (current !== item) return;
     clearTimeout(item.watchdog);
@@ -362,8 +364,9 @@ function runeGone(slot, rune, before, inPlay, wasReal) {
     lost.set(slot, entry);
     entry.timers.push(setTimeout(() => {
       if (lost.get(slot) !== entry) return;
-      entry.spoke = true;
-      say(`I can't see the rune on ${placeName(slot)}. If your hand is on it, let go so the camera can see it.`, { kind: 'info', tag: 'lost' + slot });
+      // It waits for the voice to be free. Only once it is really spoken do we also say "I can see it again" later.
+      say(`I can't see the rune on ${placeName(slot)}. If your hand is on it, let go so the camera can see it.`,
+          { kind: 'info', tag: 'lost' + slot, onStart: () => { entry.spoke = true; } });
     }, LOST_SAY_MS));
     entry.timers.push(setTimeout(() => {
       if (lost.get(slot) !== entry) return;
@@ -373,7 +376,10 @@ function runeGone(slot, rune, before, inPlay, wasReal) {
     }, LOST_GIVE_UP_MS));
     return;
   }
-  // Any other place: say it if it stays empty for a moment (or at once if we talked about that place before).
+  // Any other place: only worth saying for a place we talked about before, or a stone that is already done.
+  // (Otherwise a short flicker of the camera would make us say "off" for a rune we never announced.)
+  if (!told.has(slot) && !quest.locked.includes(slot)) return;
+  // Say it if it stays empty for a moment (sooner if we talked about that place before).
   later(slot, told.has(slot) ? 300 : 1000, () => {
     if (quest.slot(slot).rune || quest.slots.every(s => !s.rune)) return;
     const done = quest.locked.includes(slot);
@@ -516,13 +522,14 @@ function riddleText() {
 }
 function choiceText() {
   const c = quest.slot(quest.current.slot).choice;
-  return c ? `The rune points at ${c}: ${quest.current.answers[LETTERS.indexOf(c)]}.` : "I can't see which way the rune points yet.";
+  // Direction not known yet: say nothing; the knob reading says it as soon as the camera has it.
+  return c ? `The rune points at ${c}: ${quest.current.answers[LETTERS.indexOf(c)]}. ` : '';
 }
 function questionText() {
   const s = quest.current;
   const answers = s.answers.map((t, i) => `${LETTERS[i]}, ${DOT[i]}: ${t}.`).join(' ');
   return `Question: ${s.question} ${answers} Turn the rune to choose. Each quarter turn clockwise goes to the next answer. ` +
-         `${choiceText()} Press Space to lock in.`;
+         `${choiceText()}Press Space to lock in.`;
 }
 function boardText() {
   const list = (quest.slots || []).filter(s => s.rune).map(s => `the ${s.rune} on ${placeName(s.slot)}${quest.locked.includes(s.slot) ? ', done' : ''}`);
