@@ -169,6 +169,9 @@ function onEvent(msg) {
 new BroadcastChannel('rune-board').onmessage = e => onEvent(e.data);
 refresh();
 
+// "Play again" button at the end (the Arduino lock button does the same, see quest.onLock).
+document.getElementById('panel-again').addEventListener('click', () => { quest.restart(); refresh(); });
+
 // Once a second: glide back after a visitor dragged the globe, and start/stop the attract spin.
 setInterval(() => { if (camera.tick(quest) !== globe.controls().autoRotate) drawScene(); }, 1000);
 

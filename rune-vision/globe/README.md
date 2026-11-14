@@ -18,6 +18,7 @@ Open the globe first, or move a rune once after opening it: it only learns the b
 The camera page is only for setting up. Visitors only see the globe: the story card on the left, the globe on the right.
 
 1. **Riddle:** the card hints where a rune belongs (first one: Jelling, the home stone).
+   A coloured stone under "Your rune" shows which physical rune to use. It comes from step 3 ("answers") in Rune Vision.
 2. **Place the rune.** Wrong rune: a red ring pulses around the stone. Right rune: the runestone rises and its rune glows gold.
 3. **Question:** a history question with 4 answers. Turning the rune picks the answer: dot up = A, right = B, down = C, left = D.
    The answer the dot points at is highlighted live.
@@ -28,6 +29,8 @@ The camera page is only for setting up. Visitors only see the globe: the story c
    tail, closing the ring. Then the outro plays (see below) and the globe spins.
 
 Taking a rune off during its question goes back to the riddle. Taking **all** runes off the map starts again for the next visitor.
+At the end a **Play again** button appears; the Arduino lock button (or SPACE) does the same. If runes are still on the map,
+the card first asks to take them off.
 
 Testing without the camera: keys 1/2/3 and A place runes, but they have no knob, so SPACE says the dot can't be seen.
 Use the real board to test the answers.
