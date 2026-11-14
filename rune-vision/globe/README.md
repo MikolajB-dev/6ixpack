@@ -30,6 +30,15 @@ Taking a rune off during its question goes back to the riddle. Taking **all** ru
 Testing without the camera: keys 1/2/3 and A place runes, but they have no knob, so SPACE says the dot can't be seen.
 Use the real board to test the answers.
 
+## Try it without the camera (demo keys)
+
+Open `globe/` on its own and press keys in the globe window. They fake the board, so the whole journey plays as usual:
+
+- **N** next step: places the right rune, then locks in the right answer. At the end, N starts again.
+- **P** right rune on the current stone (again: take it off), **W** wrong rune
+- **1 2 3 4** turn the knob to A B C D, **Enter** lock in
+- **0** take all runes off, **H** show the keys
+
 ## Polish (what the screen does on its own)
 
 - **Camera:** when the right rune is placed, the globe flies a little closer to that stone. After a right answer it pulls back
@@ -79,6 +88,7 @@ Click, Space or Esc (in the globe window) skips to the bite.
 - `camera.js`: where the camera looks at each moment of the journey, glide-back and the waiting-screen spin
 - `effects.js`: gold dust and sparkle bursts
 - `sound.js`: the soft sounds (made in the browser)
+- `demo.js`: the demo keys, to play without the camera or board
 - `three-global.js`: loads three.js once so Globe.gl and our code share it
 - `lib/`: local copies of Globe.gl 2.46.2 and three.js 0.186.1, so it works offline
 - `img/countries.geojson`: country shapes (Natural Earth, simplified)

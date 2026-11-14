@@ -32,6 +32,7 @@ import { renderPanel } from './panel.js';
 import { Effects } from './effects.js';
 import { CameraDirector } from './camera.js';
 import { play, toggleMute } from './sound.js';
+import { startDemo } from './demo.js';
 
 /* ===================== 1. Globe setup ===================== */
 
@@ -176,14 +177,15 @@ setInterval(() => { if (camera.tick(quest) !== globe.controls().autoRotate) draw
 /* ===================== 5. Keys on the globe page ===================== */
 // (The game keys, 1/2/3/A/0 and SPACE, are on the Rune Vision page. These only help with the screen.)
 //   F  full screen      R  back to the usual view      M  sound on/off
+//   and the demo keys in demo.js (N next step, H help) to play without the board
 
 const toast = document.getElementById('toast');
 let toastTimer = null;
-function say(text) {
+function say(text, ms = 1600) {
   toast.textContent = text;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
 }
 
 window.addEventListener('keydown', e => {
@@ -198,3 +200,6 @@ window.addEventListener('keydown', e => {
     say(toggleMute() ? 'Sound off' : 'Sound on');
   }
 });
+
+// Demo keys (N, P, W, 1-4, Enter, 0, H): play without the camera or board. See demo.js.
+startDemo(quest, msg => { onEvent(msg); link.textContent = 'demo keys (H for help)'; }, text => say(text, 4000));
