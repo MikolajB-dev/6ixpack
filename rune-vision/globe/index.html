@@ -27,6 +27,15 @@
   #panel-answers li b { color: var(--gold); margin-right: 8px; }
   #panel-answers li small { float: right; color: var(--muted); font-size: 13px; margin-top: 4px; }
   #panel-answers li.selected { background: rgba(227, 185, 85, 0.22); border-color: var(--gold); }
+  /* "Your rune" badge: which physical rune the visitor should pick up (by colour). */
+  #panel-rune { display: flex; align-items: center; gap: 16px; }
+  #panel-rune[hidden] { display: none; }
+  #panel-rune-stone {
+    width: 64px; height: 76px; border-radius: 45% 45% 12% 12%;
+    border: 2px solid rgba(255,255,255,.35); box-shadow: 0 0 18px rgba(0,0,0,.5);
+  }
+  #panel-rune-label { margin: 0; font-size: clamp(18px, 1.7vw, 24px); }
+  #panel-rune-label small { display: block; color: var(--muted); font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
   #panel-hint { margin: 0; color: var(--muted); font-size: 16px; }
   #panel-feedback { margin: 0; font-size: 19px; line-height: 1.4; min-height: 1.4em; }
   #panel-feedback.right { color: #9fd36a; }
@@ -49,6 +58,10 @@
   <!-- The story card. panel.js fills it in. -->
   <div id="panel">
     <p id="panel-step"></p>
+    <div id="panel-rune" hidden>
+      <div id="panel-rune-stone"></div>
+      <p id="panel-rune-label"></p>
+    </div>
     <p id="panel-text"></p>
     <ol id="panel-answers"></ol>
     <p id="panel-hint"></p>

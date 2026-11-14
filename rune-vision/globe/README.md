@@ -18,6 +18,8 @@ Open the globe first, or move a rune once after opening it: it only learns the b
 The camera page is only for setting up. Visitors only see the globe: the story card on the left, the globe on the right.
 
 1. **Riddle:** the card hints where a rune belongs (first one: Jelling, the home stone).
+   A coloured stone under "Your rune" shows which physical rune to use. It comes from step 3 ("answers") in Rune Vision,
+   so if you change which rune belongs where, the globe follows automatically.
 2. **Place the rune.** Wrong rune: a red ring pulses around the stone. Right rune: the runestone rises and its rune glows gold.
 3. **Question:** a history question with 4 answers. Turning the rune picks the answer: dot up = A, right = B, down = C, left = D.
    The answer the dot points at is highlighted live.

@@ -11,6 +11,9 @@ const el = {
   answers:  document.getElementById('panel-answers'),
   hint:     document.getElementById('panel-hint'),
   feedback: document.getElementById('panel-feedback'),
+  rune:      document.getElementById('panel-rune'),
+  runeStone: document.getElementById('panel-rune-stone'),
+  runeLabel: document.getElementById('panel-rune-label'),
 };
 const LETTERS = ['A', 'B', 'C', 'D'];
 const DIRECTIONS = ['dot up', 'dot right', 'dot down', 'dot left'];
@@ -24,16 +27,23 @@ export function renderPanel(quest, choice) {
     el.text.textContent = 'All runestones are bound together. Jörmungandr encircles the world!';
     el.answers.innerHTML = '';
     el.hint.textContent = 'Take all runes off the map to start again.';
+    showRune(null);
     showFeedback(null);
     return;
   }
 
   el.step.textContent = `Stone ${quest.step + 1} of ${STORY.length}`;
 
+  // Which physical rune this step is about. Rune Vision tells us (its step 3 "answers"), so it is set in one place only.
+  const wanted = quest.slot(story.slot);
+  showRune(wanted.wants ? { name: wanted.wants, color: wanted.wantsColor } : null);
+
   if (quest.phase === 'riddle') {
     el.text.textContent = story.riddle;
     el.answers.innerHTML = '';
-    el.hint.textContent = 'Place a rune on the map where you think it belongs.';
+    el.hint.textContent = wanted.wants
+      ? `Place the ${wanted.wants.toLowerCase()} on the map where you think it belongs.`
+      : 'Place a rune on the map where you think it belongs.';
   } else {
     el.text.textContent = story.question;
     if (quest.phase === 'solved') choice = story.correct;   // after a right answer, keep showing the right one
@@ -42,10 +52,18 @@ export function renderPanel(quest, choice) {
         <b>${LETTERS[i]}</b> ${answer} <small>${DIRECTIONS[i]}</small>
       </li>`).join('');
     el.hint.textContent = quest.phase === 'question'
-      ? `Turn the rune in ${PLACES[story.slot].name} to choose, then press the lock button.`
+      ? `Turn the ${(wanted.wants || 'rune').toLowerCase()} in ${PLACES[story.slot].name} to choose, then press the lock button.`
       : '';
   }
   showFeedback(quest.feedback);
+}
+
+// The "Your rune" badge: a little stone in the rune's colour. rune = { name, color } or null.
+function showRune(rune) {
+  el.rune.hidden = !rune;
+  if (!rune) return;
+  el.runeStone.style.background = rune.color;
+  el.runeLabel.innerHTML = `<small>Your rune</small>${rune.name}`;
 }
 
 function showFeedback(feedback) {
