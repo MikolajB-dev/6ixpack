@@ -40,7 +40,8 @@
 </head>
 <body>
   <!-- The game itself. Nothing in rune-vision/ is changed: this page only listens to it. -->
-  <iframe id="game" src="../rune-vision/index.html" allow="camera; autoplay" title="Bindrune"></iframe>
+  <!-- serial: the Arduino lock button (Web Serial, see rune-vision/arduino.js) only works if the frame may use USB serial. -->
+  <iframe id="game" src="../rune-vision/index.html" allow="camera; autoplay; serial" title="Bindrune"></iframe>
 
   <div id="bar">
     <button id="guideBtn" aria-pressed="false" title="Spoken guide for blind and low-vision visitors. Keys: H = where am I, N = skip, + / - = speed, T = guide view">Sound guide: off (V)</button>

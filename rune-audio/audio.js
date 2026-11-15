@@ -16,12 +16,12 @@
     - beeps all the time while the camera sees the rune in play: faster and higher = closer to its place,
       left / right speaker = the side the place is on. A slow soft tick = "I am looking for the rune".
     - a short sound for every change on the board (rune on, rune off, knob step), then words
-    - turning the rune or pressing Space stops the reading of the answers and goes straight to the result
+    - pressing the lock button (Arduino) or Space stops the reading and goes straight to the result
 
   Keys (in the game window):
     V  guide on / off          H  hear where you are again      N  skip what is being said
     +  speak faster            -  speak slower                  T  guide view (what the guide sees, for testing)
-    Space  lock in the answer (the game's own key)
+    Space  lock in the answer (the game's own key; the Arduino lock button does the same)
   Address options: ?audio=1 starts with the guide on.  ?flipx=1 / ?flipy=1 mirror left-right / near-far
   (use them if the camera is turned, so the bottom of the picture is not the visitor's side of the board).
 */
@@ -285,13 +285,14 @@ setInterval(() => {
   afterChange(before, 'sync');
 }, 1000);
 
-// The board stays empty: no new event comes, so check here whether quest.js starts again (same as globe.js does).
+// Nothing new comes from Rune Vision while a rune stays hidden or the map stays empty, so call quest.tick() like globe.js:
+// it starts again after an empty map (RESTART.emptyMs) or goes back to the riddle after a long-hidden rune (COVER_MS).
 setInterval(() => {
   const before = snap();
-  if (!quest.checkRestart()) return;
-  clearLost(); newStep(); emptyNote.spoke = false;
-  cue.off();
-  afterChange(before, 'state');
+  if (!quest.tick()) return;
+  const restarted = quest.step === 0 && quest.phase === 'riddle' && quest.slots.every(s => !s.rune);
+  if (restarted) { clearLost(); newStep(); emptyNote.spoke = false; cue.off(); }
+  afterChange(before, restarted ? 'restart' : 'tick');
 }, 500);
 
 const snap = () => ({ step: quest.step, phase: quest.phase, fb: quest.feedback, fbText: quest.feedback?.text || '' });
@@ -420,8 +421,10 @@ function runeCame(slot, rune, inPlay, real) {
     lost.delete(slot);
     dropQueued(m => m.tag === 'lost' + slot);
     if (l.rune === rune) {
-      resume = { slot, step: l.step, spoke: l.spoke };
-      if (emptyNote.spoke) { l.spoke = true; resume.spoke = true; emptyNote.spoke = false; }
+      if (emptyNote.spoke) { l.spoke = true; emptyNote.spoke = false; }
+      // quest.js keeps the question going while the rune is hidden (COVER_MS): then nothing to resume.
+      if (quest.phase !== 'question') resume = { slot, step: l.step, spoke: l.spoke };
+      else if (l.spoke) lastKnobSaid = null;              // the next knob reading says the answer again
       if (l.spoke) { cue.found(); say('I can see it again.', { kind: 'info' }); }
       return;
     }
@@ -500,7 +503,16 @@ function afterChange(before, why) {
         announce();
       }
     } else if (a.phase === 'riddle') {
-      if (before.phase === 'question' && a.step === before.step) {
+      if (why === 'restart') {
+        say('All runes are off the map. The journey starts again.', { kind: 'result', interrupt: true });
+        say(riddleText(), { kind: 'riddle' });
+      } else if (before.phase === 'question' && a.step === before.step && why === 'tick' && lost.has(quest.current.slot)) {
+        // quest.js gave up waiting for the hidden rune: it was really taken off.
+        const l = lost.get(quest.current.slot);
+        l.timers.forEach(clearTimeout); lost.delete(quest.current.slot); dropQueued(m => m.tag === 'lost' + quest.current.slot);
+        cue.off();
+        say(`The ${l.rune} was taken off ${placeName(quest.current.slot)}. ` + riddleText(), { kind: 'riddle' });
+      } else if (before.phase === 'question' && a.step === before.step) {
         // The rune left the place during the question: the lost-rune timers decide what to say.
         // But if another rune now sits there, it was swapped: say so straight away.
         const s = quest.slot(quest.current.slot);
@@ -521,7 +533,7 @@ function afterChange(before, why) {
       say('A new journey. First take all the runes off the map.', { kind: 'result' });
     } else if (a.phase === 'finished') {
       cue.solved();
-      say('The journey is complete. All runestones are bound together. Jörmungandr encircles the world! Press Space to play again.', { kind: 'result' });
+      say('The journey is complete. All runestones are bound together. Jörmungandr encircles the world! Press the lock button to play again.', { kind: 'result' });
     }
     return;
   }
@@ -535,8 +547,9 @@ function afterChange(before, why) {
       cue.wrong();
       say(`The ${s.rune || 'rune'} does not belong on ${placeName(quest.current.slot)}. Take it off and try another rune.`, { kind: 'result' });
     }
-    else if (a.fb.type === 'clue') { cue.clue(); say(a.fbText + ' Turn the rune to another answer and press Space again.', { kind: 'result' }); }
-    else if (a.fb.type === 'info' && a.fbText.includes('dot')) say("I can't see the black dot on the rune. Let go of the rune so the camera can see it, then press Space again.", { kind: 'result' });
+    else if (a.fb.type === 'clue') { cue.clue(); say(a.fbText + ' Turn the rune to another answer and press the lock button again.', { kind: 'result' }); }
+    else if (a.fb.type === 'info' && /^Let go of the rune/.test(a.fbText)) { /* the guide's own lost-rune line says this */ }
+    else if (a.fb.type === 'info' && a.fbText.includes('dot')) say("I can't see the black dot on the rune. Let go of the rune so the camera can see it, then press the lock button again.", { kind: 'result' });
     else say(a.fbText, { kind: 'result' });
   } else if (!a.fb) lastSaid.fb = '';
 }
@@ -556,7 +569,7 @@ function questionText() {
   const s = quest.current;
   const answers = s.answers.map((t, i) => `${LETTERS[i]}, ${DOT[i]}: ${t}.`).join(' ');
   return `Question: ${s.question} ${answers} Turn the rune to choose. Each quarter turn clockwise goes to the next answer. ` +
-         `${choiceText()}Press Space to lock in.`;
+         `${choiceText()}Press the lock button to choose.`;
 }
 function boardText() {
   const list = (quest.slots || []).filter(s => s.rune).map(s => `the ${s.rune} on ${placeName(s.slot)}${quest.locked.includes(s.slot) ? ', done' : ''}`);
@@ -569,7 +582,7 @@ function boardOrder() {
 }
 // Where are we now: the riddle, the question, or the end.
 function situation() {
-  if (quest.phase === 'finished') return { text: 'The journey is complete. Press Space to play again.', kind: 'where' };
+  if (quest.phase === 'finished') return { text: 'The journey is complete. Press the lock button to play again.', kind: 'where' };
   if (quest.phase === 'clear') return { text: 'A new journey. First take all the runes off the map.', kind: 'where' };
   if (quest.phase === 'solved') return { text: 'Right answer. Jörmungandr is on his way. The next riddle comes in a moment.', kind: 'where' };
   if (quest.phase === 'question') return { text: questionText(), kind: 'question' };
@@ -590,7 +603,7 @@ function intro() {
       'Listen to the riddle and put a rune on the place it means. Hold the rune by its sides, with the coloured top facing up. ' +
       'While the camera sees the rune, you hear beeps: faster and higher means closer, and they come from the side the place is on. ' +
       'A slow soft tick means the camera is looking for the rune. Then answer a question by turning the rune. ' +
-      'Press Space to lock in an answer, H to hear where you are, N to skip, and V to turn the sound guide off.', { kind: 'intro', interrupt: true });
+      'Press the lock button, or Space on the keyboard, to lock in an answer. H repeats where you are, N skips, and V turns the sound guide off.', { kind: 'intro', interrupt: true });
   const s = situation();
   say(s.text, { kind: s.kind });
 }
