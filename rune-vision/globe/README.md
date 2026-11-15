@@ -28,7 +28,8 @@ The camera page is only for setting up. Visitors only see the globe: the story c
 6. After a few seconds the next riddle appears. After the last stone, the serpent goes back to Jelling and bites its own
    tail, closing the ring. Then the outro plays (see below) and the globe spins.
 
-Taking a rune off during its question goes back to the riddle. Taking **all** runes off the map starts again for the next visitor.
+Taking a rune off during its question goes back to the riddle. Taking **all** runes off the map starts again for the next visitor,
+once the map has stayed empty for 5 seconds (`RESTART` in `settings.js`): a hand over the only rune also looks like an empty map.
 At the end a **Play again** button appears; the Arduino lock button (or SPACE) does the same. If runes are still on the map,
 the card first asks to take them off.
 
@@ -79,7 +80,7 @@ the 3 runes lift off their places and fly together, a gold ring closes in and th
 (ᚼ ᚢ ᛏ in one sign): a flash, a shockwave, a light runs around the serpent and its scales glow gold.
 **BINDRUNE** comes back with "All stones are bound". Then the world goes dark, only the bind rune and the serpent's
 eyes keep glowing, and it fades back to the spinning globe. Click, Space or Esc skips to the ending.
-Taking all runes off the map stops it straight away.
+Taking all runes off the map stops it (after the same 5 seconds).
 
 - On its own page: `http://localhost:8000/globe/outro.html`. `?loop=1` plays forever, `?hold=1` stays on the bright
   bound world, `?speed=1.5` goes faster, `?start=6` begins 6 seconds in, `?line=...` changes the small line.

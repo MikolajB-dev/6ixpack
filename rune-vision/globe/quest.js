@@ -11,13 +11,14 @@
   Rules:
     - The first stone (Jelling) is "home". Every stone after it gets a serpent from home.
     - Taking the rune off during the question goes back to the riddle.
-    - When the board is completely empty, the journey starts again (for the next visitor).
+    - When the board stays completely empty for a few seconds (settings.js RESTART), the journey starts again
+      for the next visitor. Not at once: a hand over the only rune also looks like an empty board.
 */
 import { STORY } from './story.js';
-import { HUB } from './settings.js';
+import { HUB, RESTART } from './settings.js';
 
 export class Quest {
-  constructor() { this.reset(); }
+  constructor() { this.emptySince = 0; this.reset(); }
 
   reset() {
     this.step = 0;          // index in STORY
@@ -32,10 +33,12 @@ export class Quest {
   slot(id) { return this.slots.find(s => s.slot === id) || {}; }
 
   // New board state from Rune Vision.
-  onState(slots) {
+  onState(slots, now = Date.now()) {
     this.slots = slots;
     const empty = slots.every(s => !s.rune);
-    if (empty && (this.step > 0 || this.phase !== 'riddle')) { this.reset(); this.slots = slots; return; }
+    if (!empty) this.emptySince = 0;
+    else if (!this.emptySince) this.emptySince = now;
+    if (this.checkRestart(now)) return;
     if (this.phase === 'clear') return;     // still waiting for the last runes to come off
     if (this.phase === 'finished' || this.phase === 'solved') return;
 
@@ -67,6 +70,18 @@ export class Quest {
     } else {
       this.feedback = { text: `Not quite. Clue: ${this.current.clue}`, type: 'clue' };
     }
+  }
+
+  // Start again if the board has been empty long enough. onState() calls it, and globe.js calls it now and then,
+  // because nothing new comes from Rune Vision while the board stays empty. Returns true if it started again.
+  checkRestart(now = Date.now()) {
+    if (!this.emptySince) return false;
+    if (this.step === 0 && this.phase === 'riddle') return false;                      // nothing to start again
+    if (this.phase !== 'clear' && now - this.emptySince < RESTART.emptyMs) return false; // "Play again" waits for no one
+    const slots = this.slots;
+    this.reset();
+    this.slots = slots;
+    return true;
   }
 
   // "Play again": start over. If runes are still on the map, first ask to take them off,

@@ -169,6 +169,9 @@ function onEvent(msg) {
 new BroadcastChannel('rune-board').onmessage = e => onEvent(e.data);
 refresh();
 
+// The board stays empty: no new event comes, so check here whether it is time to start again (see quest.js).
+setInterval(() => { if (quest.checkRestart()) refresh(); }, 500);
+
 // "Play again" button at the end (the Arduino lock button does the same, see quest.onLock).
 document.getElementById('panel-again').addEventListener('click', () => { quest.restart(); refresh(); });
 
@@ -207,7 +210,7 @@ window.addEventListener('keydown', e => {
 /* ===================== 6. The outro ===================== */
 // When the journey is complete, the serpent goes home and bites its own tail. A moment later the
 // outro film (outro.js) plays on top of the globe, the closing twin of the intro, then fades back to the globe.
-// Taking all runes off (a new visitor) stops it straight away.
+// Taking all runes off (a new visitor) stops it, once quest.js has started again (map empty for RESTART.emptyMs).
 
 let outro = null;          // the outro that is playing now, or null
 let outroPlayed = false;   // it plays once per finished journey
