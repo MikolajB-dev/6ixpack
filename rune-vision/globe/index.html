@@ -41,11 +41,42 @@
 
   /* "Play again" button at the end of the journey. */
   #panel-again {
-    align-self: flex-start; padding: 12px 28px; font: inherit; font-size: 20px; letter-spacing: 2px; cursor: pointer;
+    align-self: flex-start; padding: 12px 22px; font: inherit; font-size: 19px; letter-spacing: 0.5px; white-space: nowrap; cursor: pointer;
     color: #1a110a; background: var(--gold); border: none; border-radius: 6px; box-shadow: 0 0 22px rgba(227, 185, 85, 0.35);
   }
   #panel-again:hover { filter: brightness(1.1); }
+  #panel-again .key { display: inline-block; padding: 0 10px; margin: 0 4px; border: 2px solid #1a110a; border-radius: 6px; font-weight: bold; }
+  #panel-again:not([hidden]) { animation: lock-glow-box 1.6s ease-in-out infinite; }
+  @keyframes lock-glow-box { 50% { box-shadow: 0 0 34px rgba(227, 185, 85, 0.7); } }
   #panel-again[hidden] { display: none; }
+
+  /* The answers in a cross around a drawing of the rune: A above, B right, C below, D left.
+     ::before is the rune; its black dot turns with the real rune (--angle and --rune are set by panel.js). */
+  #panel-answers:not(:empty) {
+    grid-template-columns: 1fr 104px 1fr; grid-template-areas: ". a ." "d dial b" ". c .";
+    align-items: center; gap: 10px;
+  }
+  #panel-answers:not(:empty)::before {
+    content: ''; grid-area: dial; justify-self: center; width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 18%, #111 0 9px, transparent 10px), var(--rune, #8d8579);
+    border: 2px solid rgba(255, 255, 255, .35); box-shadow: 0 0 22px rgba(227, 185, 85, .25);
+    transform: rotate(var(--angle, 0deg)); transition: transform .35s ease-out;
+  }
+  #panel-answers li:nth-child(1) { grid-area: a; }
+  #panel-answers li:nth-child(2) { grid-area: b; }
+  #panel-answers li:nth-child(3) { grid-area: c; }
+  #panel-answers li:nth-child(4) { grid-area: d; }
+  #panel-answers li { font-size: clamp(14px, 1.25vw, 17px); padding: 10px 12px; text-align: center; }
+  #panel-answers li b { display: block; margin: 0 0 2px; font-size: 1.3em; }
+  #panel-answers li:nth-child(1), #panel-answers li:nth-child(3) { grid-column: 1 / -1; justify-self: center; max-width: 70%; }
+
+  /* Big "Press the button to choose B" line during a question. */
+  #panel-lock { margin: 0; font-size: clamp(20px, 1.9vw, 26px); color: var(--muted); }
+  #panel-lock[hidden] { display: none; }
+  #panel-lock b { color: var(--gold); font-size: 1.5em; vertical-align: -0.1em; margin-left: 4px; }
+  #panel-lock .key { display: inline-block; padding: 1px 10px; border: 2px solid var(--gold); border-radius: 6px; color: var(--gold); font-size: .8em; letter-spacing: 2px; }
+  #panel-lock.ready { color: var(--text); animation: lock-glow 1.6s ease-in-out infinite; }
+  @keyframes lock-glow { 50% { text-shadow: 0 0 14px rgba(227, 185, 85, 0.6); } }
   #panel-feedback { margin: 0; font-size: 19px; line-height: 1.4; min-height: 1.4em; }
   #panel-feedback.right { color: #9fd36a; }
   #panel-feedback.clue  { color: #f0a35b; }
@@ -145,8 +176,9 @@
       <div id="panel-rune" hidden><div id="panel-rune-stone"></div><p id="panel-rune-label"></p></div>
       <p id="panel-text"></p>
       <ol id="panel-answers"></ol>
+      <p id="panel-lock" hidden></p>
       <p id="panel-hint"></p>
-      <button id="panel-again" hidden>Play again</button>
+      <button id="panel-again" hidden>Press the <span class="key">LOCK</span> button to play again</button>
     </div>
     <p id="panel-feedback"></p>
     <div id="panel-timer"></div>

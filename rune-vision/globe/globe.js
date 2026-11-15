@@ -160,7 +160,7 @@ function onEvent(msg) {
   else if (msg.type === 'lock') quest.onLock(msg);           // SPACE: lock in the knob's answer
   else if (msg.type === 'rotate') {                          // knob turned: update the live choice
     const s = quest.slot(msg.slot);
-    if (s.slot) s.choice = 'ABCD'[msg.step] || null;
+    if (s.slot) { s.choice = 'ABCD'[msg.step] || null; s.angle = msg.angle; }
   } else return;
 
   refresh();
@@ -173,7 +173,10 @@ refresh();
 document.getElementById('panel-again').addEventListener('click', () => { quest.restart(); refresh(); });
 
 // Once a second: glide back after a visitor dragged the globe, and start/stop the attract spin.
-setInterval(() => { if (camera.tick(quest) !== globe.controls().autoRotate) drawScene(); }, 1000);
+setInterval(() => {
+  if (quest.tick()) refresh();                       // a rune hidden too long, or the map empty long enough (quest.js)
+  if (camera.tick(quest) !== globe.controls().autoRotate) drawScene();
+}, 1000);
 
 /* ===================== 5. Keys on the globe page ===================== */
 // (The game keys, 1/2/3/A/0 and SPACE, are on the Rune Vision page. These only help with the screen.)
@@ -207,7 +210,7 @@ window.addEventListener('keydown', e => {
 /* ===================== 6. The outro ===================== */
 // When the journey is complete, the serpent goes home and bites its own tail. A moment later the
 // outro film (outro.js) plays on top of the globe, the closing twin of the intro, then fades back to the globe.
-// Taking all runes off (a new visitor) stops it straight away.
+// Taking all runes off (a new visitor) stops it, once quest.js has started again (map empty for RESTART.emptyMs).
 
 let outro = null;          // the outro that is playing now, or null
 let outroPlayed = false;   // it plays once per finished journey

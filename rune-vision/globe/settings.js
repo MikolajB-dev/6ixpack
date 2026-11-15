@@ -36,6 +36,12 @@ export const STONE = {
   riseMs: 1200,                        // how long it takes to rise out of the ground
 };
 
+// Starting again for the next visitor. An empty board only counts as "everyone took their runes off" after it has
+// stayed empty this long: a hand over the only rune on the map also looks like an empty board to the camera.
+export const RESTART = {
+  emptyMs: 5000,
+};
+
 export const SERPENT = {
   travelMs: 4000,     // time to reach the stone and finish coiling
   radius: 1.5,        // body thickness (units)
