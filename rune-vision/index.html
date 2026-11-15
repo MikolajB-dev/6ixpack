@@ -96,6 +96,7 @@
 
     <div class="panel">
       <h2>Tuning</h2>
+      <div class="row"><label style="width:110px">Colour mode</label><select id="colourMode"><option value="rgb">RGB · taught colours</option><option value="hsv">HSV · fixed ranges, wider area</option></select></div>
       <div class="row"><label style="width:110px">Colour tolerance</label><input type="range" id="hueTol" min="5" max="45"><span id="hueTolV"></span></div>
       <div class="row"><label style="width:110px">Min. coverage</label><input type="range" id="minFill" min="1" max="40"><span id="minFillV"></span></div>
       <div class="row"><label style="width:110px">Hold time</label><input type="range" id="debounce" min="0" max="3000" step="100"><span id="debounceV"></span></div>
@@ -291,6 +292,146 @@ function detectSlots(f){
   return raw;
 }
 
+/* ===================== HSV colour mode (optional second way to recognise the rune colours) =====================
+   THE SWITCH: 'rgb' = the original detection above (taught colours, looks inside the green box). This is the default.
+               'hsv' = the detection below (fixed colour ranges, finds the plate in a wider area around the box). */
+let COLOUR_MODE = 'rgb';
+// The "Colour mode" dropdown in the Tuning panel changes it while the page runs and remembers the choice in this browser.
+const COLOUR_MODE_KEY = 'runeVision.colourMode';
+try{ if(localStorage.getItem(COLOUR_MODE_KEY)==='hsv') COLOUR_MODE='hsv'; }catch(e){}
+function setColourMode(m){
+  COLOUR_MODE = m==='hsv' ? 'hsv' : 'rgb';
+  try{ localStorage.setItem(COLOUR_MODE_KEY, COLOUR_MODE); }catch(e){}
+  hsvSeen.cand=[-1,-1,-1]; hsvSeen.streak=[0,0,0]; hsvSeen.out=[-1,-1,-1]; hsvPlate.fill(null);   // start HSV mode fresh
+  if(COLOUR_MODE==='rgb') hsvUnlockCamera();
+  hint(COLOUR_MODE==='hsv' ? 'HSV colour mode: fixed colour ranges, looks in a wider area around each box.' : 'RGB colour mode: taught colours, looks inside each box.');
+}
+document.getElementById('colourMode').value = COLOUR_MODE;
+document.getElementById('colourMode').onchange = e => setColourMode(e.target.value);
+
+// ---- every HSV-mode threshold lives here, so it can be tuned at the venue (press D to see the effect) ----
+// Hue is the "colour wheel" angle in degrees: 0 = red, 60 = yellow, 120 = green, 240 = blue, 360 = red again.
+const HSV_MIN_SATURATION   = 0.45; // 0..1. Pixels less colourful than this are thrown away (brown board, grey, white). Raise if the board shows up in the debug mask; lower if a plate has holes.
+const HSV_MIN_BRIGHTNESS   = 0.30; // 0..1. Pixels darker than this are thrown away (shadows, dark brown). Lower in a dim room.
+const HSV_RED_LOW_MAX      = 15;   // red is hue 0 .. this            (red sits at BOTH ends of the wheel,
+const HSV_RED_HIGH_MIN     = 340;  // ... and hue this .. 360           so it needs two ranges)
+const HSV_YELLOW_MIN       = 40;   // yellow is hue HSV_YELLOW_MIN .. HSV_YELLOW_MAX.
+const HSV_YELLOW_MAX       = 70;   //   Hue 15..40 is deliberately nobody's: that is where the brown board sits.
+const HSV_BLUE_MIN         = 190;  // blue is hue HSV_BLUE_MIN .. HSV_BLUE_MAX
+const HSV_BLUE_MAX         = 260;
+const HSV_SEARCH_MARGIN    = 1.6;  // how far around a green box to look for its rune: 1 = only the box, 1.6 = 60% further out. Never reaches past halfway to the next box.
+const HSV_MIN_PLATE_AREA   = 0.08; // the colour must cover at least this fraction of the box's area to count as a plate. Raise if small coloured things trigger it; lower if real plates are missed.
+const HSV_CENTRE_FRACTION  = 0.5;  // only the middle of the plate is trusted: this fraction of the plate's radius (edges are ignored)
+const HSV_MIN_CENTRE_SHARE = 0.6;  // at least this fraction of the plate's middle must be the winning colour, otherwise the answer is "none"
+const HSV_STABLE_FRAMES    = 5;    // a result is only reported after this many identical frames in a row (about 0.1 s per frame)
+const HSV_LOCK_DELAY_MS    = 2000; // wait this long after the camera starts, then freeze its auto white balance / exposure (if the camera allows it)
+const HSV_ROT_REACH        = 1.6;  // knob reader: look this many plate-radii around the found plate
+
+// colour numbers match the rune list order: 0 = red rune, 1 = blue rune, 2 = yellow rune, -1 = none
+function hsvClassify(h,s,v){
+  if(s < HSV_MIN_SATURATION || v < HSV_MIN_BRIGHTNESS) return -1;
+  if(h <= HSV_RED_LOW_MAX || h >= HSV_RED_HIGH_MIN) return 0;
+  if(h >= HSV_BLUE_MIN && h <= HSV_BLUE_MAX) return 1;
+  if(h >= HSV_YELLOW_MIN && h <= HSV_YELLOW_MAX) return 2;
+  return -1;
+}
+let hsvRaw = null;                   // the camera picture before the software white balance {w,h,data}
+const hsvPlate = [null,null,null];   // where each slot's plate was found this frame: {x,y,r} like cfg.circles, or null
+// Same frame as grabFrame() (so the knob reader and its white balance work as before), plus the untouched pixels for HSV mode.
+function grabFrameHsv(){
+  const f = grabFrame();
+  hsvRaw = f ? { w:f.w, h:f.h, data:pctx.getImageData(0,0,f.w,f.h).data } : null;
+  return f;
+}
+function detectSlotsHsv(f){
+  const raw = [], med = a => { a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  for(let i=0;i<3;i++){
+    const c = cfg.circles[i], cx=c.x*f.w, cy=c.y*f.h, boxR=c.r*f.w;
+    // search area: wider than the box, but never past halfway to another box
+    let R = boxR*HSV_SEARCH_MARGIN;
+    cfg.circles.forEach((o,j)=>{ if(j!==i) R=Math.min(R, Math.hypot(o.x*f.w-cx, o.y*f.h-cy)/2); });
+    const xs=[[],[],[]], ys=[[],[],[]];
+    const x0=Math.max(0,cx-R|0), x1=Math.min(f.w-1,cx+R|0), y0=Math.max(0,cy-R|0), y1=Math.min(f.h-1,cy+R|0);
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+      const dx=x-cx, dy=y-cy; if(dx*dx+dy*dy>R*R) continue;
+      const k=(y*f.w+x)*4, col=hsvClassify(...rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]));
+      if(col>=0){ xs[col].push(x); ys[col].push(y); }
+    }
+    let best=0; for(let r=1;r<3;r++) if(xs[r].length>xs[best].length) best=r;
+    const n=xs[best].length;
+    state.fill[i]=0; hsvPlate[i]=null;
+    if(n < HSV_MIN_PLATE_AREA*Math.PI*boxR*boxR){ raw.push(-1); continue; }   // too little colour: no piece here
+    // the plate: its middle = median of the coloured pixels, its size from how many there are
+    const px=med(xs[best]), py=med(ys[best]), pr=Math.sqrt(n/Math.PI), cr=Math.max(2,pr*HSV_CENTRE_FRACTION);
+    let hit=0, tot=0;
+    for(let y=Math.max(0,py-cr|0);y<=Math.min(f.h-1,py+cr|0);y++) for(let x=Math.max(0,px-cr|0);x<=Math.min(f.w-1,px+cr|0);x++){
+      const dx=x-px, dy=y-py; if(dx*dx+dy*dy>cr*cr) continue;
+      tot++;
+      const k=(y*f.w+x)*4; if(hsvClassify(...rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]))===best) hit++;
+    }
+    const share = tot ? hit/tot : 0;
+    state.fill[i]=share*100;
+    if(share < HSV_MIN_CENTRE_SHARE){ raw.push(-1); continue; }               // middle is not one clear colour: no answer
+    hsvPlate[i]={ x:px/f.w, y:py/f.h, r:pr/f.w };
+    raw.push(best);
+  }
+  return raw;
+}
+// only pass a result on once it has been the same for HSV_STABLE_FRAMES frames in a row
+const hsvSeen = { cand:[-1,-1,-1], streak:[0,0,0], out:[-1,-1,-1] };
+function hsvStable(raw){
+  raw.forEach((v,i)=>{
+    if(v===hsvSeen.cand[i]) hsvSeen.streak[i]++; else { hsvSeen.cand[i]=v; hsvSeen.streak[i]=1; }
+    if(hsvSeen.streak[i]>=HSV_STABLE_FRAMES) hsvSeen.out[i]=v;
+  });
+  return hsvSeen.out.slice();
+}
+// Stop the camera from re-adjusting colours and brightness by itself (only if this camera/browser supports it).
+let hsvLockedStream = null;
+function hsvLockCamera(){
+  if(!stream || stream===hsvLockedStream) return;
+  const s = hsvLockedStream = stream;
+  setTimeout(async ()=>{
+    if(stream!==s) return;
+    try{
+      const track=s.getVideoTracks()[0], caps=track.getCapabilities?.()||{}, now=track.getSettings?.()||{}, adv=[];
+      if(caps.whiteBalanceMode?.includes('manual')) adv.push(now.colorTemperature ? { whiteBalanceMode:'manual', colorTemperature:now.colorTemperature } : { whiteBalanceMode:'manual' });
+      if(caps.exposureMode?.includes('manual')) adv.push(now.exposureTime ? { exposureMode:'manual', exposureTime:now.exposureTime } : { exposureMode:'manual' });
+      if(!adv.length) return console.log('[rune] HSV mode: this camera cannot lock white balance / exposure');
+      await track.applyConstraints({ advanced:adv });
+      console.log('[rune] HSV mode: camera locked', adv);
+    }catch(e){ console.log('[rune] HSV mode: camera lock failed', e); }
+  }, HSV_LOCK_DELAY_MS);
+}
+// back to RGB mode: hand white balance / exposure back to the camera's automatic control
+function hsvUnlockCamera(){
+  if(!stream || stream!==hsvLockedStream){ hsvLockedStream=null; return; }
+  hsvLockedStream=null;
+  try{
+    const track=stream.getVideoTracks()[0], caps=track.getCapabilities?.()||{}, adv=[];
+    if(caps.whiteBalanceMode?.includes('continuous')) adv.push({ whiteBalanceMode:'continuous' });
+    if(caps.exposureMode?.includes('continuous')) adv.push({ exposureMode:'continuous' });
+    if(adv.length) track.applyConstraints({ advanced:adv }).catch(()=>{});
+  }catch(e){}
+}
+// where the knob reader should look for slot i: the green box (RGB mode), or the plate HSV mode found
+function rotSlot(i){
+  const p = COLOUR_MODE==='hsv' ? hsvPlate[i] : null;
+  return p ? { x:p.x, y:p.y, r:p.r*HSV_ROT_REACH } : cfg.circles[i];
+}
+// debug picture for HSV mode (D key): pixels that count as red / blue / yellow, and a ring where each plate was found
+function drawMaskHsv(){
+  const f=hsvRaw, img=pctx.createImageData(f.w,f.h), tint=[[255,60,60,255],[70,130,255,255],[255,230,40,255]];
+  for(let k=0;k<f.data.length;k+=4){
+    const col=hsvClassify(...rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]));
+    img.data.set(col<0 ? [0,0,0,170] : tint[col], k);
+  }
+  pctx.putImageData(img,0,0);
+  vctx.globalAlpha=.85; vctx.drawImage(proc,0,0,view.width,view.height); vctx.globalAlpha=1;
+  vctx.strokeStyle='#fff'; vctx.lineWidth=2;
+  hsvPlate.forEach(p=>{ if(p){ vctx.beginPath(); vctx.arc(p.x*view.width, p.y*view.height, p.r*HSV_CENTRE_FRACTION*view.width, 0, Math.PI*2); vctx.stroke(); } });
+}
+
 function applyRaw(raw, now, instant){
   let changed=false;
   raw.forEach((v,i)=>{
@@ -478,6 +619,7 @@ function draw(){
   });
 }
 function drawMask(){
+  if(COLOUR_MODE==='hsv'){ if(hsvRaw) drawMaskHsv(); return; }
   const f=frame, img=pctx.createImageData(f.w,f.h);
   for(let k=0;k<f.data.length;k+=4){
     const [h,s,v]=rgb2hsv(f.data[k],f.data[k+1],f.data[k+2]);
@@ -501,7 +643,7 @@ const rotCv=document.createElement('canvas'), rotCx=rotCv.getContext('2d',{willR
 function grabRot(i){
   const sw=source.videoWidth||source.naturalWidth, sh=source.videoHeight||source.naturalHeight;
   if(!sw||!sh) return null;
-  const c=cfg.circles[i], Rn=(c.prof?Math.max(...c.prof):c.r)*1.05;   // radius as fraction of width
+  const c=rotSlot(i), Rn=(c.prof?Math.max(...c.prof):c.r)*1.05;   // radius as fraction of width
   const R=Rn*sw, x0=Math.max(0,c.x*sw-R), y0=Math.max(0,c.y*sh-R);
   const cw=Math.min(sw-x0,2*R), ch=Math.min(sh-y0,2*R); if(cw<4||ch<4) return null;
   const sc=Math.max(1, Math.max(cw,ch)/420);                       // cap the crop at ~420 px
@@ -513,7 +655,7 @@ function grabRot(i){
            norm:(x,y)=>[(x0+x*sc)/sw, (y0+y*sc)/sh] };
 }
 function measureRotation(f,i,ri){
-  const c=cfg.circles[i], rune=cfg.runes[ri];
+  const c=rotSlot(i), rune=cfg.runes[ri];
   const cx=f.cx, cy=f.cy;
   const inSlot=(x,y)=>{ const dx=x-cx, dy=y-cy, lim=edgeAt(c,Math.atan2(dy,dx))*f.pw*1.05; return dx*dx+dy*dy<=lim*lim; };
   let sx=0,sy=0,n=0;
@@ -577,8 +719,13 @@ function zeroKnobs(){
 function loop(now){
   if(!state.sim && source && now-lastProc>90){
     lastProc=now;
+    if(COLOUR_MODE==='hsv'){
+      frame=grabFrameHsv(); hsvLockCamera();
+      if(frame){ applyRaw(hsvStable(detectSlotsHsv(hsvRaw)), now, true); updateRotation(); }
+    } else {
     frame=grabFrame();
     if(frame){ applyRaw(detectSlots(frame), now, false); updateRotation(); }
+    }
   }
   draw();
   requestAnimationFrame(loop);
