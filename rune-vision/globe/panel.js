@@ -22,13 +22,12 @@ const el = {
   feedback: document.getElementById('panel-feedback'),
   timer:    document.getElementById('panel-timer'),
   again:    document.getElementById('panel-again'),
+  lock:     document.getElementById('panel-lock'),
   rune:      document.getElementById('panel-rune'),
   runeStone: document.getElementById('panel-rune-stone'),
   runeLabel: document.getElementById('panel-rune-label'),
 };
 const LETTERS = ['A', 'B', 'C', 'D'];
-const DIRECTIONS = ['dot up', 'dot right', 'dot down', 'dot left'];
-const ARROWS = ['↑', '→', '↓', '←'];
 
 let shown = '';            // which card is on screen ("riddle:0" ...), to know when to animate
 let answersFor = null;     // which question the answer list was built for
@@ -43,12 +42,13 @@ export function renderPanel(quest, choice) {
 
   renderProgress(quest);
   el.again.hidden = quest.phase !== 'finished';
+  el.lock.hidden = true;   // only shown during a question, see below
 
   if (quest.phase === 'finished') {
     el.step.textContent = 'The journey is complete';
     el.text.textContent = 'All runestones are bound together. Jörmungandr encircles the world!';
     clearAnswers();
-    el.hint.textContent = 'Press the lock button (or the button below) to play again.';
+    el.hint.textContent = '';   // the gold "Press the LOCK button to play again" line says it all
     showRune(null);
     showFeedback(null);
     finish(isNew, quest);
@@ -81,14 +81,22 @@ export function renderPanel(quest, choice) {
     el.text.textContent = story.question;
     if (quest.phase === 'solved') choice = story.correct;   // after a right answer, keep showing the right one
     buildAnswers(story);
+    turnDial(wanted, choice);
     [...el.answers.children].forEach((li, i) => {
       li.classList.toggle('selected', choice === LETTERS[i]);
       li.classList.toggle('correct', quest.phase === 'solved' && story.correct === LETTERS[i]);
     });
     el.hint.textContent = quest.phase === 'question'
-      ? `Turn the ${runeName} in ${PLACES[story.slot].name} to choose, then press the lock button.`
+      ? `Turn the ${runeName} in ${PLACES[story.slot].name} so its dot points at your answer.`
       : '';
   }
+
+  // The big call to action: once the dot points at an answer, tell them to press the button (the OLED shows the same letter).
+  el.lock.hidden = quest.phase !== 'question';
+  el.lock.innerHTML = choice
+    ? `Press the <span class="key">LOCK</span> button to choose <b>${choice}</b>`
+    : `Turn the rune to pick an answer`;
+  el.lock.classList.toggle('ready', !!choice);
 
   // A wrong answer was just locked in: shake the answer the knob points at.
   if (quest.feedback && quest.feedback !== lastFeedback && quest.feedback.type === 'clue') {
@@ -122,12 +130,23 @@ function renderProgress(quest) {
   if (el.progress.innerHTML !== html) el.progress.innerHTML = html;   // only when it changed, so animations don't restart
 }
 
+// The answers sit around a drawing of the rune (A above, B right, C below, D left, see index.html).
+// The drawing's black dot turns with the real rune, so visitors see what turning it does.
+let lastAngle = 0;
+function turnDial(slot, choice) {
+  if (typeof slot.angle === 'number') lastAngle = slot.angle;               // live angle from the camera
+  else if (choice) lastAngle = LETTERS.indexOf(choice) * 90;                // no angle: point at the chosen answer
+  // (hidden by a hand: keep the last angle)
+  el.answers.style.setProperty('--angle', `${lastAngle}deg`);
+  el.answers.style.setProperty('--rune', slot.wantsColor || '#8d8579');
+}
+
 function buildAnswers(story) {
   if (answersFor === story) return;
   answersFor = story;
   el.answers.innerHTML = story.answers.map((answer, i) => `
     <li style="--i:${i}">
-      <b>${LETTERS[i]}</b> ${answer} <small><span class="arrow">${ARROWS[i]}</span> ${DIRECTIONS[i]}</small>
+      <b>${LETTERS[i]}</b> ${answer}
     </li>`).join('');
 }
 

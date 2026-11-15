@@ -29,6 +29,9 @@ The camera page is only for setting up. Visitors only see the globe: the story c
    tail, closing the ring. Then the outro plays (see below) and the globe spins.
 
 Taking a rune off during its question goes back to the riddle. Taking **all** runes off the map starts again for the next visitor.
+During a question the answers sit around a drawing of the rune (A above, B right, C below, D left); its dot turns live
+with the real rune, and a big line says "Press the LOCK button to choose B". If a hand hides the rune, the question waits
+4 seconds (COVER_MS in quest.js) before going back to the riddle.
 At the end a **Play again** button appears; the Arduino lock button (or SPACE) does the same. If runes are still on the map,
 the card first asks to take them off.
 

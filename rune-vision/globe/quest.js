@@ -10,11 +10,14 @@
 
   Rules:
     - The first stone (Jelling) is "home". Every stone after it gets a serpent from home.
-    - Taking the rune off during the question goes back to the riddle.
+    - Taking the rune off during the question goes back to the riddle, but only after COVER_MS:
+      a hand turning the rune hides it from the camera for a moment, and that should not count as "taken off".
     - When the board is completely empty, the journey starts again (for the next visitor).
 */
 import { STORY } from './story.js';
 import { HUB } from './settings.js';
+
+const COVER_MS = 4000;   // how long the rune may be hidden (e.g. by a hand) during a question before we go back to the riddle
 
 export class Quest {
   constructor() { this.reset(); }
@@ -25,6 +28,7 @@ export class Quest {
     this.locked = [];       // slot ids of stones that are done, in order
     this.feedback = null;   // { text, type: 'wrong' | 'clue' | 'right' | 'info' }
     this.slots = [];
+    this.hiddenSince = null; // when the question's rune disappeared (probably a hand over it), or null
   }
 
   get current() { return STORY[this.step]; }
@@ -35,7 +39,9 @@ export class Quest {
   onState(slots) {
     this.slots = slots;
     const empty = slots.every(s => !s.rune);
-    if (empty && (this.step > 0 || this.phase !== 'riddle')) { this.reset(); this.slots = slots; return; }
+    // A completely empty board means a new visitor: start again. But during a question the only rune may just be
+    // hidden by a hand, so that case is handled below (the grace period) instead.
+    if (empty && this.phase !== 'question' && (this.step > 0 || this.phase !== 'riddle')) { this.reset(); this.slots = slots; return; }
     if (this.phase === 'clear') return;     // still waiting for the last runes to come off
     if (this.phase === 'finished' || this.phase === 'solved') return;
 
@@ -44,10 +50,30 @@ export class Quest {
       if (s.rune && s.correct) { this.phase = 'question'; this.feedback = null; }
       else if (s.rune) this.feedback = { text: 'The stone stays silent. That rune does not belong here.', type: 'wrong' };
       else this.feedback = null;
-    } else if (this.phase === 'question' && !(s.rune && s.correct)) {
-      this.phase = 'riddle';
-      this.feedback = null;
+    } else if (this.phase === 'question') {
+      if (s.rune && s.correct) {                       // the rune is (back) in view
+        if (this.hiddenSince) { this.hiddenSince = null; this.feedback = null; }
+      } else if (!s.rune) {                            // gone: probably a hand over it, give it a moment
+        if (!this.hiddenSince) this.hiddenSince = Date.now();
+        this.feedback = { text: 'Let go of the rune for a moment, so the stone can see it.', type: 'info' };
+      } else {                                         // another rune is there now: back to the riddle
+        this.backToRiddle();
+      }
     }
+  }
+
+  // Called every second by globe.js: if the rune stayed hidden too long, it was really taken off.
+  tick() {
+    if (!(this.phase === 'question' && this.hiddenSince && Date.now() - this.hiddenSince > COVER_MS)) return false;
+    if (this.slots.every(s => !s.rune)) { const slots = this.slots; this.reset(); this.slots = slots; }   // board empty: new visitor
+    else this.backToRiddle();
+    return true;   // something changed
+  }
+
+  backToRiddle() {
+    this.phase = 'riddle';
+    this.feedback = null;
+    this.hiddenSince = null;
   }
 
   // The visitor locked in an answer (SPACE in Rune Vision). msg = { slot, choice, slots, ... }
@@ -93,6 +119,7 @@ export class Quest {
     if (this.locked.includes(id)) return 'right';
     if (this.phase === 'finished' || this.phase === 'clear' || id !== this.current.slot) return 'empty';
     const s = this.slot(id);
+    if (this.phase === 'question' && this.hiddenSince) return 'right';   // hidden by a hand: keep the stone up
     return !s.rune ? 'empty' : s.correct ? 'right' : 'wrong';
   }
 
