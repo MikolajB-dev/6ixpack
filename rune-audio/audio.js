@@ -101,7 +101,24 @@ function stopCurrent() {
   clearTimeout(current.watchdog);
   current = null;
   try { speechSynthesis.cancel(); } catch (e) {}
+  // Chrome can drop or jam a sentence spoken right after cancel(): give the voice a moment first.
+  gapUntil = Math.max(gapUntil, performance.now() + 200);
 }
+
+// The voice. Chrome's own pick for British English is often a Google ONLINE voice, which stops after ~15 s and often
+// never says "finished" when it is interrupted (an early answer cuts the question): then the guide would go silent.
+// So we choose a voice installed on the computer (Windows: Microsoft Hazel / George / Susan / Zira ...).
+let voice = null;
+function pickVoice() {
+  let all = [];
+  try { all = speechSynthesis.getVoices(); } catch (e) { return; }
+  const en = all.filter(v => /^en([-_]|$)/i.test(v.lang));
+  voice = en.find(v => v.localService && /^en[-_]GB/i.test(v.lang))
+       || en.find(v => v.localService)
+       || en.find(v => /^en[-_]GB/i.test(v.lang)) || en[0] || null;
+  if (voice) console.log('[sound guide] voice:', voice.name, voice.localService ? '(on this computer)' : '(online)');
+}
+try { pickVoice(); speechSynthesis.addEventListener('voiceschanged', pickVoice); } catch (e) {}
 const talking = () => !!current || queue.length > 0;
 
 // Start the next message when the voice is free (called from say() and every 80 ms).
@@ -114,27 +131,52 @@ function pump() {
   current = item;
   caption(item.text);
   if (item.onStart) item.onStart();
+  item.t0 = now; item.started = false; item.alive = now;
   const done = () => {
     if (current !== item) return;
     clearTimeout(item.watchdog);
     current = null;
     gapUntil = performance.now() + 250;
   };
+  item.done = done;
   // Chrome sometimes forgets to say "finished": move on anyway after a generous time.
   item.watchdog = setTimeout(done, item.text.length * 95 / rate + 4000);
   try {
+    speechSynthesis.resume();                        // un-jam a voice that Chrome left paused
     // Long texts are split into sentences (Chrome stops very long utterances).
     const parts = speakable(item.text).split(/(?<=[.!?])\s+/).filter(Boolean);
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p);
-      u.lang = 'en-GB';
+      if (voice) u.voice = voice;
+      u.lang = voice ? voice.lang : 'en-GB';
       u.rate = rate;
+      u.onstart = u.onboundary = () => { if (current === item) { item.started = true; item.alive = performance.now(); } };
       if (i === parts.length - 1) { u.onend = done; u.onerror = done; }
+      else u.onend = () => { if (current === item) item.alive = performance.now(); };
       speechSynthesis.speak(u);
     });
   } catch (e) { done(); }
 }
 setInterval(pump, 80);
+
+// Self-repair, a few times a second: a message that never starts, or a voice that stopped without saying "finished".
+setInterval(() => {
+  const item = current;
+  if (!item || !unlocked) return;
+  const now = performance.now();
+  let speaking = true;
+  try { speaking = speechSynthesis.speaking || speechSynthesis.pending; } catch (e) {}
+  if (!item.started && now - item.t0 > 2000) {
+    // Never started: reset the voice and try this message once more (then give up on it).
+    console.warn('[sound guide] voice did not start, resetting it');
+    clearTimeout(item.watchdog); current = null;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    gapUntil = now + 200;
+    if (!item.retried) { item.retried = true; queue.unshift(item); }
+  } else if (item.started && !speaking && now - item.alive > 1200) {
+    item.done();                                     // it finished but Chrome forgot to tell us
+  }
+}, 250);
 
 function skip() { stopCurrent(); gapUntil = 0; pump(); }
 function setRate(r) {
@@ -588,8 +630,25 @@ function situation() {
   if (quest.phase === 'question') return { text: questionText(), kind: 'question' };
   return { text: riddleText(), kind: 'riddle' };
 }
+// Is the camera page set up on this computer? Every computer starts with untaught colours (saved per browser).
+// Returns a sentence about what is missing, or '' when all is fine. (It only reads the camera page's settings.)
+function calibrationText() {
+  if (!cam) return '';
+  const runes = cam.cfg.runes, tol = cam.cfg.hueTol, notes = [];
+  const untaught = runes.filter(r => !r.taught).map(r => r.name);
+  if (untaught.length === 1) notes.push(`For the camera page: the colour of the ${untaught[0]} is not taught on this computer yet. Teach it in step 2.`);
+  else if (untaught.length) notes.push(`For the camera page: the colours of the ${untaught.join(', the ').replace(/, the ([^,]*)$/, ' and the $1')} are not taught on this computer yet. Teach them in step 2.`);
+  for (let a = 0; a < runes.length; a++) for (let b = a + 1; b < runes.length; b++) {
+    if (!runes[a].taught || !runes[b].taught) continue;
+    if (hueDist(runes[a].h, runes[b].h) <= tol) notes.push(`For the camera page: the ${runes[a].name} and the ${runes[b].name} look almost the same colour. Teach them again in step 2.`);
+  }
+  return notes.join(' ');
+}
+
 function whereText() {
   let t = situation().text + ' ' + boardText();
+  const cal = calibrationText();
+  if (cal) t = cal + ' ' + t;
   const want = targetRune(), tr = track[want];
   if (quest.phase === 'riddle' && tr && tr.vis) {
     const w = wayTo(tr);
@@ -603,7 +662,8 @@ function intro() {
       'Listen to the riddle and put a rune on the place it means. Hold the rune by its sides, with the coloured top facing up. ' +
       'While the camera sees the rune, you hear beeps: faster and higher means closer, and they come from the side the place is on. ' +
       'A slow soft tick means the camera is looking for the rune. Then answer a question by turning the rune. ' +
-      'Press the lock button, or Space on the keyboard, to lock in an answer. H repeats where you are, N skips, and V turns the sound guide off.', { kind: 'intro', interrupt: true });
+      'Press the lock button, or Space on the keyboard, to lock in an answer. H repeats where you are, N skips, and V turns the sound guide off.' +
+      (calibrationText() ? ' ' + calibrationText() : ''), { kind: 'intro', interrupt: true });
   const s = situation();
   say(s.text, { kind: s.kind });
 }
@@ -701,26 +761,37 @@ function look(now) {
   const runes = cam.cfg.runes, tol = cam.cfg.hueTol, found = [];
   const c0 = cam.cfg.circles[0], R = (c0.prof ? Math.max(...c0.prof) : c0.r) * GW;      // size of a place, in our pixels
   const zoneArea = Math.PI * R * R;
-  for (let r = 0; r < runes.length; r++) {
-    const t = runes[r], m = model(r);
+  // Each rune's colour test (the camera page's taught colour, plus "about as strong a colour as the rune itself").
+  const tests = runes.map((t, r) => {
+    const m = model(r);
     if (!bgc[r]) { bgc[r] = new Uint16Array(NP); act[r] = new Uint8Array(NP); }
-    const B = bgc[r], A = act[r], tr = track[r];
-    const box = tr && tr.acquired && now - tr.seen < 1000 ? tr.box : null;      // don't learn the rune itself as background
-    const sLoose = Math.max(0.3, t.s * 0.6), vMin = Math.max(0.15, t.v * 0.45);
-    const sMin = Math.max(sLoose, m.s * 0.72), hTol = Math.min(tol, 12);
-    for (let p = 0; p < NP; p++) {
-      let hit = false;
-      if (SS[p] >= sMin && VV[p] >= vMin) { const h = HH[p]; hit = hueDist(h, t.h) <= tol && hueDist(h, m.h) <= hTol; }
+    const tr = track[r];
+    return { t, m, B: bgc[r], A: act[r],
+      box: tr && tr.acquired && now - tr.seen < 1000 ? tr.box : null,   // don't learn the rune itself as background
+      sMin: Math.max(0.3, t.s * 0.6, m.s * 0.72), vMin: Math.max(0.15, t.v * 0.45), hTol: Math.min(tol, 12) };
+  });
+  // One pixel belongs to ONE rune at most: the one whose colour is closest. So the red rune (or a hand) can never
+  // also count as the blue or yellow rune, even when two taught colours overlap a little.
+  for (let p = 0; p < NP; p++) {
+    const h = HH[p], sv = SS[p], v = VV[p];
+    let best = -1, bestD = 1e9;
+    for (let r = 0; r < tests.length; r++) {
+      const T = tests[r];
+      let hit = false, d = 0;
+      if (sv >= T.sMin && v >= T.vMin) { d = hueDist(h, T.m.h); hit = hueDist(h, T.t.h) <= tol && d <= T.hTol; }
+      const B = T.B;
       if (hit) {
         if (B[p] < 65000) {
-          if (!box) B[p]++;
-          else { const x = p % GW, y = (p / GW) | 0; if (x < box[0] || x > box[2] || y < box[1] || y > box[3]) B[p]++; }
+          if (!T.box) B[p]++;
+          else { const x = p % GW, y = (p / GW) | 0; if (x < T.box[0] || x > T.box[2] || y < T.box[1] || y > T.box[3]) B[p]++; }
         }
+        if (B[p] < BG_ON && d < bestD) { bestD = d; best = r; }
       } else B[p] = B[p] > 8 ? B[p] - 8 : 0;
-      A[p] = hit && B[p] < BG_ON ? 1 : 0;
+      T.A[p] = 0;
     }
-    found[r] = eyes.flash ? [] : patches(A, B, zoneArea * 0.9);
+    if (best >= 0) tests[best].A[p] = 1;
   }
+  for (let r = 0; r < tests.length; r++) found[r] = eyes.flash ? [] : patches(tests[r].A, tests[r].B, zoneArea * 0.9);
   return { found, zoneArea };
 }
 
@@ -793,9 +864,12 @@ function follow(res, now) {
     if (pick) {
       const jump = !t.acquired || !t.vis || far(pick.x, pick.y, t.x, t.y) > 0.05;
       if (jump) { t.x = pick.x; t.y = pick.y; } else { t.x += (pick.x - t.x) * 0.65; t.y += (pick.y - t.y) * 0.65; }
-      if (!t.acquired) { t.ax = t.x; t.ay = t.y; t.moved = now; }
+      if (!t.acquired) { t.ax = t.x; t.ay = t.y; t.moved = now; t.moveStart = now; }
       t.acquired = true; t.vis = true; t.seen = now; t.box = pick.box; t.area = pick.area;
-      if (far(t.x, t.y, t.ax, t.ay) > 0.012) { t.moved = now; t.ax = t.x; t.ay = t.y; }
+      if (far(t.x, t.y, t.ax, t.ay) > 0.012) {
+        if (now - t.moved > 600) t.moveStart = now;     // it starts moving (again): for "how long has it been moving"
+        t.moved = now; t.ax = t.x; t.ay = t.y;
+      }
     } else {
       if (t.vis && now - t.seen > 200) t.vis = false;
       if (t.acquired && now - t.seen > HOLD_MS) t.acquired = false;
@@ -875,11 +949,17 @@ function guide(now) {
   }
   if (!unlocked) return;
 
-  // Other runes that are moved: it's not their turn (said again each time, at most every 5 s).
-  const want = targetRune();
+  // Other runes that are moved: it's not their turn (at most every 5 s per rune). Only when it is clear:
+  // the rune in play is not being moved right now, and the other one is rune-sized, has really been moving
+  // for a second, and is not where the rune in play is (that would be the same rune, seen in two colours).
+  const want = targetRune(), tw = track[want];
+  const wantBusy = tw && tw.acquired && now - tw.seen < 3000;    // followed in the last 3 s (also while fingers cover it)
+  const minSize = Math.max(12, Math.PI * ((cam.cfg.circles[0].prof ? Math.max(...cam.cfg.circles[0].prof) : cam.cfg.circles[0].r) * GW) ** 2 * 0.05);
   for (const [k, t] of Object.entries(track)) {
     const r = +k;
-    if (r === want || !t.vis || now - t.moved > 500) continue;
+    if (r === want || wantBusy || !t.vis || now - t.moved > 500) continue;
+    if (now - (t.moveStart || now) < 1000 || t.area < minSize) continue;
+    if (tw && tw.acquired && far(t.x, t.y, tw.x, tw.y) < 0.08) continue;
     if (STORY.slice(0, quest.step).some(s => runeFor(s.slot) === r)) continue;     // a rune that is already done
     if (now - (stepFlags.notTurn[r] || 0) < 5000) continue;
     stepFlags.notTurn[r] = now;
