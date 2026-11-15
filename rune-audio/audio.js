@@ -27,7 +27,7 @@
 */
 import { Quest } from '../rune-vision/globe/quest.js';
 import { STORY } from '../rune-vision/globe/story.js';
-import { PLACES, SERPENT } from '../rune-vision/globe/settings.js';
+import { PLACES, SERPENT, RESTART } from '../rune-vision/globe/settings.js';
 
 const params = new URLSearchParams(location.search);
 const FLIP_X = params.get('flipx') === '1';
@@ -234,10 +234,11 @@ function readGlobe() {
     const doc = camWin?.document.getElementById('globeView')?.contentDocument;
     const stepText = doc?.getElementById('panel-step')?.textContent || '';
     if (/journey is complete/i.test(stepText)) return { step: STORY.length, phase: 'finished' };
+    if (/new journey/i.test(stepText)) return { step: 0, phase: 'clear' };              // "Play again", runes still on the map
     const m = stepText.match(/Stone (\d+) of/);
     if (!m) return null;
     const answers = doc.getElementById('panel-answers').children.length;
-    const right = doc.getElementById('panel-feedback').className === 'right';
+    const right = doc.getElementById('panel-feedback').classList.contains('right');
     return { step: +m[1] - 1, phase: answers ? (right ? 'solved' : 'question') : 'riddle' };
   } catch (e) { return null; }
 }
@@ -284,6 +285,15 @@ setInterval(() => {
   afterChange(before, 'sync');
 }, 1000);
 
+// The board stays empty: no new event comes, so check here whether quest.js starts again (same as globe.js does).
+setInterval(() => {
+  const before = snap();
+  if (!quest.checkRestart()) return;
+  clearLost(); newStep(); emptyNote.spoke = false;
+  cue.off();
+  afterChange(before, 'state');
+}, 500);
+
 const snap = () => ({ step: quest.step, phase: quest.phase, fb: quest.feedback, fbText: quest.feedback?.text || '' });
 const lastSaid = { fb: '' };
 
@@ -308,6 +318,7 @@ const lost = new Map();
 const LOST_SAY_MS = 1200;      // say "can't see it" after this
 const LOST_GIVE_UP_MS = 8000;  // after this it really was taken off
 let resume = null;             // { slot, step, spoke }: the rune came back, so the question just continues
+const emptyNote = { spoke: false };   // we said "I can't see any rune on the map"
 const slotTimers = new Map();  // slot -> timer for "is it still like that in a moment?"
 const told = new Set();        // slots we said something about ("not open yet", "is off"), so we also say when it ends
 function clearLost() {
@@ -339,11 +350,23 @@ function onState(slots) {
   const prev = quest.slots || [];
   const before = snap();
   quest.onState(slots);
-  // Board empty after stone 1 = everything was taken off (the locked stones too): a real restart.
-  // At stone 1 an empty board can also be a hand over the only rune, so then we wait like for any lost rune.
-  const restart = slots.every(s => !s.rune) && before.step > 0;
-  if (restart) { cue.off(); clearLost(); newStep(); }
-  else for (const s of slots) {
+  // An empty board can be a hand over the only rune, or everyone took their runes off. quest.js only starts again
+  // after the board has stayed empty for a few seconds (RESTART in settings.js), so say both in one line.
+  const empty = slots.every(s => !s.rune), progress = before.step > 0 || !['riddle', 'clear'].includes(before.phase);
+  if (empty && progress && prev.some(s => s.rune)) {
+    emptyNote.spoke = false;
+    later('empty', 900, () => {
+      if (!quest.slots.every(s => !s.rune) || quest.step !== before.step) return;
+      say(`I can't see any rune on the map. If your hand is over a rune, let go. If you took them all off, the journey starts again in ${Math.round(RESTART.emptyMs / 1000)} seconds.`,
+          { kind: 'info', tag: 'empty', onStart: () => { emptyNote.spoke = true; } });
+    });
+  }
+  if (!empty && prev.length && prev.every(s => !s.rune)) {             // runes are back before the restart
+    clearTimeout(slotTimers.get('empty')); slotTimers.delete('empty');
+    dropQueued(m => m.tag === 'empty');
+    if (emptyNote.spoke && !lost.size) { emptyNote.spoke = false; cue.found(); say('I can see the runes again.', { kind: 'info' }); }
+  }
+  for (const s of slots) {
     const p = prev.find(x => x.slot === s.slot) || {};
     if ((p.rune || null) === (s.rune || null)) continue;
     const inPlay = STORY[before.step]?.slot === s.slot && before.phase !== 'finished';
@@ -363,7 +386,7 @@ function runeGone(slot, rune, before, inPlay, wasReal) {
     const entry = { rune, step: before.step, spoke: false, timers: [] };
     lost.set(slot, entry);
     entry.timers.push(setTimeout(() => {
-      if (lost.get(slot) !== entry) return;
+      if (lost.get(slot) !== entry || quest.slots.every(s => !s.rune)) return;   // empty map: the empty-board line covers it
       // It waits for the voice to be free. Only once it is really spoken do we also say "I can see it again" later.
       say(`I can't see the rune on ${placeName(slot)}. If your hand is on it, let go so the camera can see it.`,
           { kind: 'info', tag: 'lost' + slot, onStart: () => { entry.spoke = true; } });
@@ -376,6 +399,7 @@ function runeGone(slot, rune, before, inPlay, wasReal) {
     }, LOST_GIVE_UP_MS));
     return;
   }
+  if (quest.slots.every(s => !s.rune)) return;   // the whole map is empty: one line about that is said instead
   // Any other place: only worth saying for a place we talked about before, or a stone that is already done.
   // (Otherwise a short flicker of the camera would make us say "off" for a rune we never announced.)
   if (!told.has(slot) && !quest.locked.includes(slot)) return;
@@ -397,6 +421,7 @@ function runeCame(slot, rune, inPlay, real) {
     dropQueued(m => m.tag === 'lost' + slot);
     if (l.rune === rune) {
       resume = { slot, step: l.step, spoke: l.spoke };
+      if (emptyNote.spoke) { l.spoke = true; resume.spoke = true; emptyNote.spoke = false; }
       if (l.spoke) { cue.found(); say('I can see it again.', { kind: 'info' }); }
       return;
     }
@@ -492,9 +517,11 @@ function afterChange(before, why) {
       cue.solved();
       say(a.fbText + (quest.locked.length >= 2
         ? ` Jörmungandr slithers from Jelling to ${placeName(quest.locked[quest.locked.length - 1])} and coils around the stone.` : ''), { kind: 'result' });
+    } else if (a.phase === 'clear') {
+      say('A new journey. First take all the runes off the map.', { kind: 'result' });
     } else if (a.phase === 'finished') {
       cue.solved();
-      say('The journey is complete. All runestones are bound together. Jörmungandr encircles the world! Take all runes off the map to start again.', { kind: 'result' });
+      say('The journey is complete. All runestones are bound together. Jörmungandr encircles the world! Press Space to play again.', { kind: 'result' });
     }
     return;
   }
@@ -542,7 +569,8 @@ function boardOrder() {
 }
 // Where are we now: the riddle, the question, or the end.
 function situation() {
-  if (quest.phase === 'finished') return { text: 'The journey is complete. Take all runes off the map to start again.', kind: 'where' };
+  if (quest.phase === 'finished') return { text: 'The journey is complete. Press Space to play again.', kind: 'where' };
+  if (quest.phase === 'clear') return { text: 'A new journey. First take all the runes off the map.', kind: 'where' };
   if (quest.phase === 'solved') return { text: 'Right answer. Jörmungandr is on his way. The next riddle comes in a moment.', kind: 'where' };
   if (quest.phase === 'question') return { text: questionText(), kind: 'question' };
   return { text: riddleText(), kind: 'riddle' };
@@ -818,7 +846,7 @@ function newStep() {
 }
 
 function guide(now) {
-  if (!quest.current || quest.phase === 'finished' || quest.phase === 'solved') return;
+  if (!quest.current || ['finished', 'solved', 'clear'].includes(quest.phase)) return;   // nothing to guide towards
 
   // Question: is the knob dot visible? If not for a while, the hand is probably over it.
   if (quest.phase === 'question') {

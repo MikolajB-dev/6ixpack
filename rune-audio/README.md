@@ -98,8 +98,9 @@ The game itself still uses the camera page's own detection. If the camera page s
 
 ## Known limits
 
-- If the board looks empty for a moment after stone 1 (e.g. a hand covers the only rune), the base game starts the
-  journey again, and the guide says so. This can't be changed without touching `rune-vision/`.
+- An empty map only starts the journey again after 5 seconds (`RESTART` in `rune-vision/globe/settings.js`), so a hand
+  over the only rune no longer resets the game. While the map looks empty the guide says: "I can't see any rune on the map.
+  If your hand is over a rune, let go. If you took them all off, the journey starts again in 5 seconds."
 - Tested by replaying a recording of the board and with simulated camera events, not yet with a blind tester.
 
 ## If directions are wrong
