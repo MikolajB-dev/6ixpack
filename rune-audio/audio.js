@@ -720,7 +720,7 @@ const far = (ax, ay, bx, by) => Math.hypot(ax - bx, (ay - by) * GH / GW);     //
 
 // Follow each rune from look to look.
 function follow(res, now) {
-  const minNew = Math.max(12, res.zoneArea * 0.07);       // a new rune must be at least this big (a rune top is ~15-20 % of a place)
+  const minNew = Math.max(12, res.zoneArea * 0.05);       // a new rune must be at least this big (a rune top is ~15-20 % of a place)
   res.found.forEach((list, r) => {
     const t = track[r] || (track[r] = { x: 0, y: 0, vis: false, seen: 0, acquired: false, moved: 0, ax: 0, ay: 0, box: null, pend: null, area: 0 });
     const quiet = eyes.looks < eyes.quietUntil || eyes.looks < (models[r]?.quietUntil || 0);   // just started / light changed: don't trust "fresh"
@@ -869,7 +869,7 @@ function guide(now) {
     if (w.dist > 1.5) stepFlags.onSpot = false;
 
     const still = now - t.moved > 4000;                   // lying still: slow "here it is" beeps
-    const gap = still ? 1400 : Math.min(900, 150 + w.dist * 55);
+    const gap = still ? 1300 : Math.min(800, 110 + w.dist * 42);
     if (now - stepFlags.lastBeep > gap) {
       stepFlags.lastBeep = now;
       cue.beep(420 + Math.max(0, 760 - w.dist * 62), w.pan, hidden ? 0.045 : still ? 0.06 : 0.09);
