@@ -1,35 +1,51 @@
 /*
-  Jörmungandr: one serpent that slithers from one place to another and coils around the stone there.
+  Jörmungandr: the ONE serpent of the journey. There is only ever one of it on the globe.
+
+  It starts at the home stone (Jelling). Every time a stone is solved its head slithers on from the
+  stone it reached last to the new one and coils around it; the body it already laid down stays.
+  When the journey is complete the head goes back to Jelling and bites its own tail, closing the ring
+  (the same picture as the intro).
 
   How it works:
-    1. When it is created we work out its whole route once (`route`): over the globe, then a coil.
-    2. Every frame we build a tube along the part of the route it has reached so far,
+    1. follow(stops) works out the whole route once: for each leg over the globe, then a coil around the stone.
+       The route only ever grows, so the part the serpent already lies on never moves.
+    2. Every frame we build a tube along the part of the route the head has reached so far,
        thin at the tail, thick in the body, and swaying side to side so it looks alive.
-    3. A head (with glowing eyes) sits at the front of the tube, looking where it is going.
+    3. The head sits at the front of the tube, looking where it is going.
+
+  It looks exactly like the serpent of the intro and outro (horned head with jaws, glowing eyes, bone spikes
+  along the back, the same scales): those pieces come from intro.js and are scaled up to SERPENT.radius,
+  so the body is as thick as before.
 */
 import * as THREE from './lib/three/three.module.js';
-import { COLORS, SERPENT, STONE } from './settings.js';
+import { SERPENT, STONE } from './settings.js';
 import { angleBetween, pointBetween, offset } from './geo.js';
+import { makeHead, scaleTexture, BODY as INTRO_BODY } from './intro.js';
 
 const SIDES = 12;          // how round the body is (corners around the tube)
-const TRAVEL_STEPS = 140;  // route points over the globe
+const TRAVEL_STEPS = 140;  // route points over the globe, per leg
 const COIL_STEPS = 32;     // route points per turn of the coil
+const TAIL_POINTS = 70;    // how many route points the tail takes to reach full thickness
+const MAX_POINTS = 1200;   // room in the buffers (3 legs use about 640)
+const SIZE = SERPENT.radius / INTRO_BODY;   // intro units -> globe units (the intro's body is 0.11 thick)
+const UP = new THREE.Vector3(0, 1, 0);
 
 export class Serpent {
-  // coil = false: the serpent stops at the stone instead of wrapping around it.
-  constructor(globe, from, to, now, coil = true) {
+  constructor(globe) {
     this.globe = globe;
-    this.start = now;
-    this.route = buildRoute(globe, from, to, coil);    // [{ pos, up, travel }]
-    this.travelCount = TRAVEL_STEPS + 1;
+    this.route = [];        // [{ pos, lat, lng, alt, travel, u, side }]
+    this.key = '';          // which stops the route was built for ("jelling>yorba|ring")
+    this.from = 0;          // the head glides from route point `from`...
+    this.to = 0;            // ...to route point `to`...
+    this.start = 0;         // ...starting at this time
+    this.ms = SERPENT.travelMs;
 
     // One buffer big enough for the whole serpent; each frame we fill in only what is visible.
-    const rings = this.route.length + 1;
-    this.positions = new Float32Array(rings * (SIDES + 1) * 3);
-    this.normals = new Float32Array(rings * (SIDES + 1) * 3);
-    this.uvs = new Float32Array(rings * (SIDES + 1) * 2);
+    this.positions = new Float32Array(MAX_POINTS * (SIDES + 1) * 3);
+    this.normals = new Float32Array(MAX_POINTS * (SIDES + 1) * 3);
+    this.uvs = new Float32Array(MAX_POINTS * (SIDES + 1) * 2);
     const index = [];
-    for (let r = 0; r < rings - 1; r++) {
+    for (let r = 0; r < MAX_POINTS - 1; r++) {
       for (let s = 0; s < SIDES; s++) {
         const a = r * (SIDES + 1) + s, b = a + SIDES + 1;
         index.push(a, b, a + 1, b, b + 1, a + 1);
@@ -40,22 +56,69 @@ export class Serpent {
     this.geometry.setAttribute('normal', new THREE.BufferAttribute(this.normals, 3));
     this.geometry.setAttribute('uv', new THREE.BufferAttribute(this.uvs, 2));
     this.geometry.setIndex(index);
+    this.geometry.setDrawRange(0, 0);
 
-    this.material = new THREE.MeshStandardMaterial({ map: scaleTexture(), roughness: 0.55, metalness: 0.25 });
+    // The same skin and bone as the intro's serpent.
+    this.material = new THREE.MeshStandardMaterial({ map: scaleTexture(), roughness: 0.5, metalness: 0.35, side: THREE.DoubleSide });
+    this.bone = new THREE.MeshStandardMaterial({ color: '#dcc592', roughness: 0.45, metalness: 0.3 });
     this.body = new THREE.Mesh(this.geometry, this.material);
     this.body.frustumCulled = false;                    // its size changes every frame
-    this.head = makeHead(this.material);
 
-    globe.scene().add(this.body, this.head);
+    // The intro's head (horns, jaws, glowing eyes), made bigger to fit this body.
+    this.face = makeHead(this.material, this.bone);
+    this.head = new THREE.Group();
+    this.face.group.scale.setScalar(SIZE);
+    this.head.add(this.face.group);
+
+    // Bone spikes, two per body point (one on the back, one on the side), like the intro.
+    const spike = new THREE.ConeGeometry(0.03 * SIZE, 0.24 * SIZE, 5);
+    spike.translate(0, 0.12 * SIZE, 0);                // so a spike stands on its base
+    this.spikes = new THREE.InstancedMesh(spike, this.bone, MAX_POINTS * 2);
+    this.spikes.frustumCulled = false;
+    this.spikes.count = 0;
+
+    this.body.visible = this.head.visible = this.spikes.visible = false;   // nothing to show until there are 2 stops
+    globe.scene().add(this.body, this.spikes, this.head);
   }
+
+  // Where the serpent should be. stops: the places it has reached, in order (first = home).
+  // ring: true once the journey is complete, so the head goes back home and bites its tail.
+  follow(stops, ring, now) {
+    const key = stops.map(p => p.name).join('>') + (ring ? '|ring' : '');
+    if (key === this.key) return;
+    // Growing = the same stops as before plus one more (or plus the ring). The route is built the same way
+    // every time, so the part it already lies on stays exactly where it was.
+    const grows = this.key !== '' && !this.key.endsWith('|ring') && key.startsWith(this.key);
+    const reach = this.reach(now);
+
+    this.key = key;
+    this.route = stops.length >= 2 ? buildRoute(this.globe, stops, ring) : [];
+    this.body.visible = this.head.visible = this.spikes.visible = this.route.length > 0;
+
+    // Growing: the head carries on from where it is now. Anything else (a new visitor): start from the beginning.
+    this.from = grows ? Math.min(reach, this.route.length - 1) : 0;
+    this.to = Math.max(0, this.route.length - 1);
+    this.start = now;
+    this.ms = SERPENT.travelMs;          // each leg takes this long
+  }
+
+  // How far along the route the head is (in route points) at this time.
+  reach(now) {
+    if (!this.route.length) return 0;
+    const t = Math.min(1, (now - this.start) / this.ms);
+    return this.from + (this.to - this.from) * t;
+  }
+
+  // True once the head has arrived where follow() sent it (for the ring: the jaws are on the tail).
+  arrived(now) { return this.route.length > 0 && now - this.start >= this.ms; }
 
   // Called every frame.
   update(now) {
-    const progress = Math.min(1, (now - this.start) / SERPENT.travelMs);
-    const reach = Math.max(2, progress * (this.route.length - 1));  // how far along the route the head is
+    if (!this.route.length) return;
+    const reach = Math.max(2, this.reach(now));         // at least a tiny bit of body
     const last = Math.floor(reach);
 
-    // The points of the visible part, swaying sideways on the travel part.
+    // The points of the visible part, swaying sideways on the travel parts.
     const pts = [];
     for (let i = 0; i <= last; i++) pts.push(this.swayed(i, now));
     const frac = reach - last;
@@ -70,26 +133,34 @@ export class Serpent {
     this.head.position.copy(tip);
     this.head.up.copy(tip).normalize();
     this.head.lookAt(tip.clone().add(tip.clone().sub(before)));
+
+    // Jaws, as in the intro: a little open while it slithers, shut once it has arrived.
+    // Closing the ring: wide open just before the end, then they snap shut on the tail, and the eyes flare.
+    const t = Math.min(1, (now - this.start) / this.ms);
+    const ring = this.key.endsWith('|ring');
+    const open = ring ? smooth((t - 0.6) / 0.25) * (1 - smooth((t - 0.94) / 0.06)) * 0.75 : 0.18 * (1 - smooth((t - 0.9) / 0.1));
+    this.face.setJaw(0.12 + open);
+    const since = (now - this.start - this.ms) / 1000;
+    this.face.setGlow(1 + (ring && since > 0 ? Math.exp(-since * 2) * 2 : 0));
   }
 
   // Route point i, moved sideways by a travelling wave (only while crossing the globe, not in the coil).
   swayed(i, now) {
     const p = this.route[i];
     if (!p.travel) return p.pos.clone();
-    const u = i / TRAVEL_STEPS;                                  // 0 at the start, 1 at the stone
-    const envelope = Math.sin(Math.PI * u);                      // no sway at the two ends
-    const wave = Math.sin(u * 28 - now / 260) * SERPENT.wiggle * envelope;
+    const envelope = Math.sin(Math.PI * p.u);                    // no sway at the two ends of a leg
+    const wave = Math.sin(p.u * 28 - now / 260) * SERPENT.wiggle * envelope;
     return p.pos.clone().addScaledVector(p.side, wave);
   }
 
   // Fill the tube buffers along the points: thin tail, full body, slightly narrower neck.
   buildTube(pts) {
-    const n = pts.length;
-    let length = 0;
+    const n = Math.min(pts.length, MAX_POINTS);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), size = new THREE.Vector3(), dir = new THREE.Vector3();
+    let length = 0, spikes = 0;
     for (let i = 0; i < n; i++) {
       if (i > 0) length += pts[i].distanceTo(pts[i - 1]);
-      const u = i / (n - 1);
-      const radius = SERPENT.radius * Math.min(1, 0.15 + u * 3) * (u > 0.97 ? 0.85 : 1);
+      const radius = SERPENT.radius * Math.min(1, 0.15 + 0.85 * i / TAIL_POINTS) * (i > n - 7 ? 0.85 : 1);
 
       const tangent = pts[Math.min(n - 1, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize();
       const up = pts[i].clone().normalize();
@@ -103,9 +174,22 @@ export class Serpent {
         const v = pts[i].clone().addScaledVector(normal, radius);
         this.positions.set([v.x, v.y, v.z], k * 3);
         this.normals.set([normal.x, normal.y, normal.z], k * 3);
-        this.uvs.set([length / 6, s / SIDES], k * 2);
+        this.uvs.set([length * 5 / SIZE, s / SIDES * 2], k * 2);    // the scale pattern at the intro's size
+      }
+
+      // Spikes leaning back towards the tail; none on the thin tail tip or the neck.
+      if (i >= TAIL_POINTS * 0.3 && i < n - 4) {
+        const big = radius / SERPENT.radius * (0.7 + 0.3 * Math.sin(i * 1.7));
+        for (const [base, k] of [[top, 1], [side, 0.75]]) {
+          dir.copy(base).addScaledVector(tangent, -0.55).normalize();
+          q.setFromUnitVectors(UP, dir);
+          const v = pts[i].clone().addScaledVector(base, radius * 0.85);
+          this.spikes.setMatrixAt(spikes++, m.compose(v, q, size.setScalar(big * k)));
+        }
       }
     }
+    this.spikes.count = spikes;
+    this.spikes.instanceMatrix.needsUpdate = true;
     this.geometry.setDrawRange(0, (n - 1) * SIDES * 6);
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.normal.needsUpdate = true;
@@ -113,45 +197,39 @@ export class Serpent {
   }
 
   remove() {
-    this.globe.scene().remove(this.body, this.head);
+    this.globe.scene().remove(this.body, this.spikes, this.head);
     this.geometry.dispose();
   }
 }
 
 /* ---------- the route ---------- */
 
-function buildRoute(globe, from, to, coil) {
+// stops: places in order. ring: after the last stop, go back to the first one and end at the tail.
+function buildRoute(globe, stops, ring) {
   const route = [];
-  const add = (place, altitude, travel) => {
-    const c = globe.getCoords(place.lat, place.lng, altitude);
-    route.push({ pos: new THREE.Vector3(c.x, c.y, c.z), travel });
-  };
   const ground = (SERPENT.radius + 0.3) / 100;                 // just touching the ground
   const stoneTop = STONE.height / 100;
+  const add = (p, alt, travel, u = 0) => {
+    const c = globe.getCoords(p.lat, p.lng, alt);
+    route.push({ pos: new THREE.Vector3(c.x, c.y, c.z), lat: p.lat, lng: p.lng, alt, travel, u });
+  };
 
-  // Where it arrives: on the edge of the coil, on the side facing where it came from.
-  const back = pointBetween(to, from, 0.02);              // a little way back along the route
-  const bearing = Math.atan2((back.lng - to.lng) * Math.cos(to.lat * Math.PI / 180), back.lat - to.lat);
-  const arrive = coil ? offset(to, SERPENT.coilRadius, bearing) : offset(to, STONE.width, bearing);
+  // The tail lies on the ground beside the home stone, on the side facing the first trip.
+  const home = stops[0];
+  const tail = offset(home, SERPENT.coilRadius, bearing(home, stops[1]));
+  add(tail, ground, true, 0);
 
-  // 1. Over the globe, along the shortest route, arching higher for longer trips.
-  const height = SERPENT.height * angleBetween(from, arrive) / Math.PI;
-  for (let i = 0; i <= TRAVEL_STEPS; i++) {
-    const t = i / TRAVEL_STEPS;
-    add(pointBetween(from, arrive, t), ground + height * Math.sin(Math.PI * t), true);
+  for (let k = 1; k < stops.length; k++) leg(route, add, route[route.length - 1], stops[k], true, ground, stoneTop);
+
+  // Closing the ring: back home, stopping just short of the tail so the jaws close on it.
+  if (ring) {
+    const lastPoint = route[route.length - 1];
+    const headLength = SERPENT.radius * 1.8 / 100;              // radians: as in the intro, the tail tip ends inside the jaws
+    const gap = Math.min(0.5, headLength / Math.max(1e-6, angleBetween(lastPoint, tail)));
+    leg(route, add, lastPoint, pointBetween(tail, lastPoint, gap), false, ground, stoneTop);
   }
 
-  // 2. Around the stone, climbing up it.
-  if (coil) {
-    const steps = Math.round(SERPENT.coilTurns * COIL_STEPS);
-    for (let i = 1; i <= steps; i++) {
-      const angle = bearing + (i / COIL_STEPS) * Math.PI * 2;
-      const climb = ground + (stoneTop * 0.75 - ground) * (i / steps);
-      add(offset(to, SERPENT.coilRadius, angle), climb, false);
-    }
-  }
-
-  // Sideways direction at each travel point (for the swaying).
+  // Sideways direction at each point (for the swaying).
   route.forEach((p, i) => {
     const next = route[Math.min(route.length - 1, i + 1)].pos, prev = route[Math.max(0, i - 1)].pos;
     const tangent = next.clone().sub(prev).normalize();
@@ -160,46 +238,38 @@ function buildRoute(globe, from, to, coil) {
   return route;
 }
 
-/* ---------- looks ---------- */
+// One leg: from the last route point over the globe to `to`. coil = true: wrap around the stone there.
+function leg(route, add, start, to, coil, ground, stoneTop) {
+  // Where it arrives: on the edge of the coil, on the side facing where it came from.
+  const dir = coil ? bearing(to, start) : 0;
+  const arrive = coil ? offset(to, SERPENT.coilRadius, dir) : to;
 
-function makeHead(bodyMaterial) {
-  const head = new THREE.Group();
-  const r = SERPENT.radius;
-
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), bodyMaterial);
-  skull.scale.set(r * 1.25, r * 0.85, r * 2.1);        // wide, flat and long
-  skull.position.z = r * 0.6;
-  head.add(skull);
-
-  const eyeMaterial = new THREE.MeshBasicMaterial({ color: COLORS.eyes });
-  for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(r * 0.28, 10, 8), eyeMaterial);
-    eye.position.set(side * r * 0.8, r * 0.45, r * 1.3);
-    head.add(eye);
+  // Over the globe, along the shortest route, arching higher for longer trips.
+  // It starts at the height it is at now (the top of the last coil) and comes down to the ground.
+  const height = SERPENT.height * angleBetween(start, arrive) / Math.PI;
+  for (let i = 1; i <= TRAVEL_STEPS; i++) {
+    const t = i / TRAVEL_STEPS;
+    const settle = start.alt + (ground - start.alt) * Math.min(1, t * 4);
+    add(pointBetween(start, arrive, t), settle + height * Math.sin(Math.PI * t), true, t);
   }
-  return head;
-}
 
-// Overlapping scales: dark green with bronze edges, repeated along the body.
-function scaleTexture() {
-  const c = document.createElement('canvas');
-  c.width = 128; c.height = 128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = COLORS.scales; ctx.fillRect(0, 0, 128, 128);
-  const size = 32;
-  for (let row = -1; row < 5; row++) {
-    for (let col = -1; col < 5; col++) {
-      const x = col * size + (row % 2 ? size / 2 : 0), y = row * size * 0.75;
-      const g = ctx.createRadialGradient(x + size / 2, y, 2, x + size / 2, y, size * 0.7);
-      g.addColorStop(0, '#4f7a3a'); g.addColorStop(1, COLORS.scales);
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x + size / 2, y, size / 2, 0, Math.PI); ctx.fill();
-      ctx.strokeStyle = COLORS.scaleEdge; ctx.lineWidth = 2;
-      ctx.stroke();
+  // Around the stone, climbing up it.
+  if (coil) {
+    const steps = Math.round(SERPENT.coilTurns * COIL_STEPS);
+    for (let i = 1; i <= steps; i++) {
+      const angle = dir + (i / COIL_STEPS) * Math.PI * 2;
+      const climb = ground + (stoneTop * 0.75 - ground) * (i / steps);
+      add(offset(to, SERPENT.coilRadius, angle), climb, false);
     }
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
 }
+
+// Compass direction from place a towards place b (0 = north, PI/2 = east), measured right at a.
+function bearing(a, b) {
+  const near = pointBetween(a, b, 0.02);
+  return Math.atan2((near.lng - a.lng) * Math.cos(a.lat * Math.PI / 180), near.lat - a.lat);
+}
+
+/* ---------- helpers ---------- */
+
+const smooth = x => { const c = Math.min(1, Math.max(0, x)); return c * c * (3 - 2 * c); };   // 0..1, easing in and out
